@@ -35,7 +35,7 @@ try:  # Supports both `uvicorn app.main:app` and `uvicorn main:app`.
         Subscription,
         Ticket,
     )
-    from .seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS
+    from routes.seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS
 except ImportError:  # pragma: no cover - used when running from backend/app.
     from models import (
         Base,
@@ -47,7 +47,7 @@ except ImportError:  # pragma: no cover - used when running from backend/app.
         Subscription,
         Ticket,
     )
-    from seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS
+    from routes.seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS
 
 
 DATABASE_URL = os.getenv("PULSECHECK_DATABASE_URL", "sqlite:///./pulsecheck.db")
