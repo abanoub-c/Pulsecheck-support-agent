@@ -242,6 +242,15 @@ KNOWN_INCIDENTS = [
     },
 ]
 
+# ---------------------------------------------------------------------------
+# Invoices 
+# ---------------------------------------------------------------------------
+INVOICES = [
+    {"invoice_id": "INV-0001", "customer_id": "CUST-0005", "subscription_id": "SUB-0005", "amount": 99.00, "currency": "USD", "status": "failed", "invoice_date": "2026-08-01", "due_date": "2026-08-01", "paid_at": None, "failure_reason": "card_declined"},
+    {"invoice_id": "INV-0002", "customer_id": "CUST-0012", "subscription_id": "SUB-0012", "amount": 299.00, "currency": "USD", "status": "failed", "invoice_date": "2026-08-14", "due_date": "2026-08-14", "paid_at": None, "failure_reason": "insufficient_funds"},
+    {"invoice_id": "INV-0003", "customer_id": "CUST-0002", "subscription_id": "SUB-0002", "amount": 99.00, "currency": "USD", "status": "paid", "invoice_date": "2026-08-03", "due_date": "2026-08-03", "paid_at": "2026-08-03", "failure_reason": None},
+    {"invoice_id": "INV-0004", "customer_id": "CUST-0003", "subscription_id": "SUB-0003", "amount": 150.00, "currency": "USD", "status": "paid", "invoice_date": "2026-05-20", "due_date": "2026-05-20", "paid_at": "2026-05-20", "failure_reason": None}, # Mid-cycle proration example
+]
 
 if __name__ == "__main__":
     print(f"Customers:       {len(CUSTOMERS)}")
