@@ -7,8 +7,7 @@ Run locally from this directory with:
     uvicorn main:app --reload
 
 The service uses SQLite + SQLAlchemy and seeds the database once on startup
-from seed_data.py. Set PULSECHECK_DATABASE_URL to use another SQLite URL, for
-example: sqlite:///./pulsecheck.db
+from seed_data.py. Set PULSECHECK_DATABASE_URL to use another SQLite URL.
 """
 
 from __future__ import annotations
@@ -17,6 +16,9 @@ import os
 from datetime import date, datetime, timedelta , timezone
 from decimal import Decimal
 from typing import Any , Optional
+from datetime import date
+from decimal import Decimal
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -115,6 +117,14 @@ def compute_plan_change(subscription: Subscription, new_tier: str, today: date) 
         "days_in_cycle": days_in_cycle,
         "prorated_delta": delta,
     }
+        Base, Customer, Escalation, Invoice, KnownIncident, Refund, Subscription, Ticket
+    )
+    from routes.seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS, INVOICES
+except ImportError:  # pragma: no cover - used when running from backend/app.
+    from models import (
+        Base, Customer, Escalation, Invoice, KnownIncident, Refund, Subscription, Ticket
+    )
+    from routes.seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS, INVOICES
 
 
 DATABASE_URL = os.getenv("PULSECHECK_DATABASE_URL", "sqlite:///./pulsecheck.db")
@@ -131,15 +141,18 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# ---------------------------------------------------------------------------
+# Strict Types for AI Guardrails
+# ---------------------------------------------------------------------------
+TicketCategory = Literal["billing", "technical", "refund", "other"]
+TicketStatus = Literal["open", "resolved", "escalated"]
 
 # ---------------------------------------------------------------------------
 # Pydantic API schemas
 # ---------------------------------------------------------------------------
 
-
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
 
 class CustomerRead(ORMModel):
     customer_id: str
@@ -149,7 +162,6 @@ class CustomerRead(ORMModel):
     signup_date: date
     tier: str
     account_status: str
-
 
 class SubscriptionRead(ORMModel):
     subscription_id: str
@@ -175,7 +187,6 @@ class CancelSubscriptionRequest(BaseModel):
                      "explicitly confirmed cancellation with a yes/no answer."
     )
 
-
 class InvoiceRead(ORMModel):
     invoice_id: str
     customer_id: str
@@ -188,7 +199,6 @@ class InvoiceRead(ORMModel):
     paid_at: date | None
     failure_reason: str | None
 
-
 class KnownIncidentRead(ORMModel):
     incident_id: str
     title: str
@@ -200,7 +210,6 @@ class KnownIncidentRead(ORMModel):
     root_cause: str
     customer_facing_note: str
 
-
 class RefundCreate(BaseModel):
     customer_id: str
     amount: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
@@ -210,6 +219,10 @@ class RefundCreate(BaseModel):
     confirmed: bool = Field(
         description="Must be true — only set after the customer explicitly confirmed the exact refund amount."
     )
+
+class RefundUpdate(BaseModel):
+    status: Literal["approved", "rejected"]
+    notes: str | None = None
 
 class RefundRead(ORMModel):
     refund_id: str
@@ -225,7 +238,6 @@ class RefundRead(ORMModel):
     auto_approved: bool = False
     approval_message: str = ""
 
-
 class TicketRead(ORMModel):
     ticket_id: str
     customer_id: str
@@ -238,14 +250,13 @@ class TicketRead(ORMModel):
     resolved_at: date | None
     resolution_notes: str | None
 
-
 class TicketCreate(BaseModel):
     customer_id: str
-    category: str = Field(min_length=1, max_length=20)
+    category: TicketCategory
     subtype: str = Field(min_length=1, max_length=40)
     subject: str = Field(min_length=1, max_length=240)
     message: str = Field(min_length=1)
-    status: str = Field(default="open", min_length=1, max_length=20)
+    status: TicketStatus = "open"
     created_at: date | None = None
     resolved_at: date | None = None
     resolution_notes: str | None = None
@@ -266,24 +277,27 @@ class TicketSummary(BaseModel):
         from_attributes = True
 
 class TicketUpdate(BaseModel):
-    category: str | None = Field(default=None, min_length=1, max_length=20)
+    category: TicketCategory | None = None
     subtype: str | None = Field(default=None, min_length=1, max_length=40)
     subject: str | None = Field(default=None, min_length=1, max_length=240)
     message: str | None = Field(default=None, min_length=1)
-    status: str | None = Field(default=None, min_length=1, max_length=20)
+    status: TicketStatus | None = None
     resolved_at: date | None = None
     resolution_notes: str | None = None
 
-
 class EscalationCreate(BaseModel):
     customer_id: str
-    category: str = Field(min_length=1, max_length=20)
+    category: TicketCategory
     ticket_id: str | None = None
     confidence: Decimal | None = Field(default=None, ge=0, le=1, max_digits=4, decimal_places=3)
     reasoning: str | None = None
     proposed_action: dict[str, Any] | None = None
     conversation_summary: str | None = None
 
+class EscalationUpdate(BaseModel):
+    status: Literal["resolved", "pending"]
+    decision: str
+    decision_note: str | None = None
 
 class EscalationRead(ORMModel):
     escalation_id: str
@@ -377,14 +391,12 @@ class CancelSubscriptionResponse(BaseModel):
 # Database helpers and startup seed
 # ---------------------------------------------------------------------------
 
-
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:12].upper()}"
@@ -394,6 +406,8 @@ def seed_database(force: bool = False) -> None:
     """Create tables and load seed_data.py for an empty database or when forced."""
     if force:
         Base.metadata.drop_all(bind=engine)
+def seed_database() -> None:
+    """Create tables and load seed_data.py exactly once for an empty database."""
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         if not force:
@@ -418,21 +432,17 @@ def seed_database(force: bool = False) -> None:
         db.add_all(DowntimeEvent(**row) for row in DOWNTIME_EVENTS)
         db.commit()
 
-
 @app.on_event("startup")
 def on_startup() -> None:
     seed_database()
-
 
 # ---------------------------------------------------------------------------
 # Health and lookup endpoints
 # ---------------------------------------------------------------------------
 
-
 @app.get("/", tags=["health"])
 def root() -> dict[str, str]:
     return {"service": "Pulsecheck Mock CRM", "status": "ok"}
-
 
 @app.get("/health", tags=["health"])
 def health() -> dict[str, str]:
@@ -455,33 +465,22 @@ def get_customer(customer_id: str, db: Session = Depends(get_db)) -> Customer:
         raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
     return customer
 
-
 @app.get("/subscriptions/{customer_id}", response_model=SubscriptionRead, tags=["subscriptions"])
 def get_subscription(customer_id: str, db: Session = Depends(get_db)) -> Subscription:
-    subscription = db.scalar(
-        select(Subscription).where(Subscription.customer_id == customer_id)
-    )
+    subscription = db.scalar(select(Subscription).where(Subscription.customer_id == customer_id))
     if subscription is None:
         raise HTTPException(status_code=404, detail=f"Subscription for {customer_id} not found")
     return subscription
-
 
 @app.get("/invoices/{customer_id}", response_model=list[InvoiceRead], tags=["invoices"])
 def get_invoices(customer_id: str, db: Session = Depends(get_db)) -> list[Invoice]:
     if db.get(Customer, customer_id) is None:
         raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
-    return list(
-        db.scalars(
-            select(Invoice)
-            .where(Invoice.customer_id == customer_id)
-            .order_by(Invoice.invoice_date.desc())
-        )
-    )
-
+    return list(db.scalars(select(Invoice).where(Invoice.customer_id == customer_id).order_by(Invoice.invoice_date.desc())))
 
 @app.get("/incidents", response_model=list[KnownIncidentRead], tags=["incidents"])
 def get_incidents(
-    status_filter: str | None = Query(default="open", alias="status"),
+    status_filter: str | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
 ) -> list[KnownIncident]:
     statement = select(KnownIncident).order_by(KnownIncident.started_at.desc())
@@ -524,13 +523,21 @@ def get_historical_stats(
 # Refunds: the explicit business guardrail
 # ---------------------------------------------------------------------------
 
-
 @app.post("/refunds", response_model=RefundRead, status_code=status.HTTP_201_CREATED, tags=["refunds"])
 def issue_refund(payload: RefundCreate, db: Session = Depends(get_db)) -> RefundRead:
     if db.get(Customer, payload.customer_id) is None:
         raise HTTPException(status_code=404, detail=f"Customer {payload.customer_id} not found")
-    if payload.ticket_id is not None and db.get(Ticket, payload.ticket_id) is None:
-        raise HTTPException(status_code=404, detail=f"Ticket {payload.ticket_id} not found")
+    
+    # Anti-duplication guardrail
+    recent_duplicate = db.scalar(
+        select(Refund).where(
+            Refund.customer_id == payload.customer_id,
+            Refund.amount == payload.amount,
+            Refund.created_at == date.today()
+        ).limit(1)
+    )
+    if recent_duplicate:
+        raise HTTPException(status_code=409, detail="A refund for this exact amount was already requested today.")
 
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Refund requires explicit customer confirmation.")
@@ -549,28 +556,33 @@ def issue_refund(payload: RefundCreate, db: Session = Depends(get_db)) -> Refund
         status="approved" if auto_approved else "pending_review",
         created_at=date.today(),
         processed_at=date.today() if auto_approved else None,
-        notes=(
-            "Automatically approved under the $100 policy threshold."
-            if auto_approved
-            else "Held for human approval because the amount is $100 or greater."
-        ),
+        notes="Automatically approved under threshold." if auto_approved else "Held for human approval ($100+).",
     )
     db.add(refund)
     db.commit()
     db.refresh(refund)
-    refund_data = RefundRead.model_validate(refund).model_dump(
-        exclude={"auto_approved", "approval_message"}
-    )
+    
+    refund_data = RefundRead.model_validate(refund).model_dump(exclude={"auto_approved", "approval_message"})
     return RefundRead(
         **refund_data,
         auto_approved=auto_approved,
-        approval_message=(
-            "Refund approved automatically."
-            if auto_approved
-            else "Refund created and queued for human approval."
-        ),
+        approval_message="Refund approved automatically." if auto_approved else "Refund queued for human approval."
     )
 
+@app.patch("/refunds/{refund_id}", response_model=RefundRead, tags=["refunds"])
+def update_refund(refund_id: str, payload: RefundUpdate, db: Session = Depends(get_db)):
+    refund = db.get(Refund, refund_id)
+    if not refund:
+        raise HTTPException(status_code=404, detail="Refund not found")
+    
+    refund.status = payload.status
+    if payload.notes:
+        refund.notes = payload.notes
+    refund.processed_at = date.today()
+    
+    db.commit()
+    db.refresh(refund)
+    return refund
 
 @app.post(
     "/subscriptions/{customer_id}/retention-discount",
@@ -654,7 +666,6 @@ def cancel_subscription_endpoint(
 # Ticket CRUD
 # ---------------------------------------------------------------------------
 
-
 @app.get("/tickets/{ticket_id}", response_model=TicketRead, tags=["tickets"])
 def get_ticket(ticket_id: str, db: Session = Depends(get_db)) -> Ticket:
     ticket = db.get(Ticket, ticket_id)
@@ -662,12 +673,8 @@ def get_ticket(ticket_id: str, db: Session = Depends(get_db)) -> Ticket:
         raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found")
     return ticket
 
-
 @app.post("/tickets", response_model=TicketRead, status_code=status.HTTP_201_CREATED, tags=["tickets"])
 def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> Ticket:
-    if db.get(Customer, payload.customer_id) is None:
-        raise HTTPException(status_code=404, detail=f"Customer {payload.customer_id} not found")
-
     ticket = Ticket(
         ticket_id=_new_id("TICK"),
         customer_id=payload.customer_id,
@@ -684,7 +691,6 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> Ticke
     db.commit()
     db.refresh(ticket)
     return ticket
-
 
 @app.patch("/tickets/{ticket_id}", response_model=TicketRead, tags=["tickets"])
 def update_ticket(ticket_id: str, payload: TicketUpdate, db: Session = Depends(get_db)) -> Ticket:
@@ -825,19 +831,8 @@ def apply_account_credit(
 # Human escalation queue
 # ---------------------------------------------------------------------------
 
-
-@app.post(
-    "/escalations",
-    response_model=EscalationRead,
-    status_code=status.HTTP_201_CREATED,
-    tags=["escalations"],
-)
+@app.post("/escalations", response_model=EscalationRead, status_code=status.HTTP_201_CREATED, tags=["escalations"])
 def create_escalation(payload: EscalationCreate, db: Session = Depends(get_db)) -> Escalation:
-    if db.get(Customer, payload.customer_id) is None:
-        raise HTTPException(status_code=404, detail=f"Customer {payload.customer_id} not found")
-    if payload.ticket_id is not None and db.get(Ticket, payload.ticket_id) is None:
-        raise HTTPException(status_code=404, detail=f"Ticket {payload.ticket_id} not found")
-
     escalation = Escalation(
         escalation_id=_new_id("ESC"),
         customer_id=payload.customer_id,
@@ -855,6 +850,22 @@ def create_escalation(payload: EscalationCreate, db: Session = Depends(get_db)) 
     db.refresh(escalation)
     return escalation
 
+@app.patch("/escalations/{escalation_id}", response_model=EscalationRead, tags=["escalations"])
+def update_escalation(escalation_id: str, payload: EscalationUpdate, db: Session = Depends(get_db)):
+    escalation = db.get(Escalation, escalation_id)
+    if not escalation:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+    
+    escalation.status = payload.status
+    escalation.decision = payload.decision
+    if payload.decision_note:
+        escalation.decision_note = payload.decision_note
+    if payload.status == "resolved":
+        escalation.resolved_at = date.today()
+        
+    db.commit()
+    db.refresh(escalation)
+    return escalation
 
 @app.get("/escalations", response_model=list[EscalationRead], tags=["escalations"])
 def list_escalations(
@@ -868,7 +879,6 @@ def list_escalations(
     if customer_id is not None:
         statement = statement.where(Escalation.customer_id == customer_id)
     return list(db.scalars(statement))
-
 
 if __name__ == "__main__":
     import uvicorn
