@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 from dateutil.relativedelta import relativedelta
@@ -242,6 +242,11 @@ class RefundRead(ORMModel):
     notes: str | None
     auto_approved: bool = False
     approval_message: str = ""
+
+
+class RefundUpdate(BaseModel):
+    status: Literal["approved", "rejected"]
+    notes: str | None = None
 
 
 class TicketRead(ORMModel):
@@ -600,6 +605,22 @@ def issue_refund(payload: RefundCreate, db: Session = Depends(get_db)) -> Refund
             else "Refund created and queued for human approval."
         ),
     )
+
+
+@app.patch("/refunds/{refund_id}", response_model=RefundRead, tags=["refunds"])
+def update_refund(refund_id: str, payload: RefundUpdate, db: Session = Depends(get_db)):
+    refund = db.get(Refund, refund_id)
+    if not refund:
+        raise HTTPException(status_code=404, detail="Refund not found")
+
+    refund.status = payload.status
+    if payload.notes:
+        refund.notes = payload.notes
+    refund.processed_at = date.today()
+
+    db.commit()
+    db.refresh(refund)
+    return refund
 
 
 # ---------------------------------------------------------------------------
