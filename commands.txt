@@ -1,0 +1,35 @@
+// Api
+cd backend\app   
+uvicorn main:app --reload
+or
+uvicorn main:app --reload --port 8000
+
+
+// Resed Data seed
+Invoke-RestMethod -Method Post http://localhost:8000/admin/reseed
+
+// Run Eval Script
+
+python -m agent.evals.eval_runner --area unit
+python -m agent.evals.eval_runner --area router -v
+python -m agent.evals.eval_runner --area billing -v
+python -m agent.evals.eval_runner --area technical -v
+python -m agent.evals.eval_runner --area refund -v
+python -m agent.evals.eval_runner --area hybrid -v
+python -m agent.evals.eval_runner --area escalation -v
+python -m agent.evals.eval_runner --area regression -v
+
+// BY IDs
+python -m agent.evals.eval_runner --ids EVAL-007 -v
+
+//Run everything
+python -m agent.evals.eval_runner --output reports\all.json
+
+//other options
+python -m agent.evals.eval_runner --lint                      # check the dataset only (no backend or LLM)
+python -m agent.evals.eval_runner --area refund --delay 6     # slower, if Groq keeps returning 429s
+python -m agent.evals.eval_runner --skip-seed-check           # skip the seed-data checks at the start
+python -m agent.evals.eval_runner --no-reseed                 # don't reset the database between cases
+
+// langgraph studio
+langgraph dev

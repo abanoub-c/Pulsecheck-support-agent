@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any , Optional
 
 from sqlalchemy import (
     JSON,
@@ -91,6 +91,20 @@ class Customer(Base):
         cascade="all, delete-orphan",
     )
 
+# backend/app/models.py
+class DowntimeEvent(Base):
+    __tablename__ = "downtime_events"
+
+    event_id: Mapped[str] = mapped_column(primary_key=True)          
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.customer_id"))
+    endpoint_name: Mapped[str]                                        
+    started_at: Mapped[date] = mapped_column(ISODate, nullable=False)
+    resolved_at: Mapped[Optional[date]] = mapped_column(ISODate, nullable=True)                          
+    duration_minutes: Mapped[Optional[int]]                           
+    cause: Mapped[Optional[str]]                                      
+    related_incident_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("known_incidents.incident_id"), nullable=True
+    )
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -113,6 +127,11 @@ class Subscription(Base):
     cancelled_at: Mapped[date | None] = mapped_column(ISODate, nullable=True)
     failed_payment_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     payment_method_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    account_balance: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"))
+    # Discount features
+    discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0.00"))
+    discount_expires_at: Mapped[Optional[date]] = mapped_column(ISODate, nullable=True)
+    retention_offer_used: Mapped[bool] = mapped_column(nullable=False, default=False)
 
     customer: Mapped[Customer] = relationship(back_populates="subscription")
     invoices: Mapped[list[Invoice]] = relationship(back_populates="subscription")
