@@ -1,0 +1,909 @@
+{
+  "timestamp": "2026-10-04T12:54:20.249683+00:00",
+  "total_cases": 8,
+  "passed": 2,
+  "failed": 6,
+  "errored": 0,
+  "pass_rate": 0.25,
+  "avg_score": 0.5659090909090909,
+  "dimensions": {
+    "guardrail": 0.38461538461538464,
+    "response": 0.5,
+    "routing": 0.47058823529411764,
+    "tool_precision": 1.0,
+    "tool_recall": 0.45454545454545453
+  },
+  "by_area": {
+    "billing": {
+      "passed": 2,
+      "total": 8
+    }
+  },
+  "top_failing_checks": [
+    [
+      "response_any",
+      7
+    ],
+    [
+      "tool_called",
+      6
+    ],
+    [
+      "specialist",
+      4
+    ],
+    [
+      "router_category",
+      3
+    ],
+    [
+      "escalated",
+      3
+    ],
+    [
+      "tool_args",
+      3
+    ],
+    [
+      "confidence_min",
+      2
+    ],
+    [
+      "tool_result",
+      2
+    ]
+  ],
+  "cases": [
+    {
+      "eval_id": "EVAL-001",
+      "name": "Billing - failed payment (card declined)",
+      "area": "billing",
+      "passed": false,
+      "score": 0.3,
+      "checks": [
+        {
+          "name": "router_category",
+          "dimension": "routing",
+          "passed": false,
+          "expected": [
+            "billing"
+          ],
+          "actual": null,
+          "detail": ""
+        },
+        {
+          "name": "confidence_min",
+          "dimension": "routing",
+          "passed": false,
+          "expected": ">= 0.75",
+          "actual": 0.0,
+          "detail": ""
+        },
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": false,
+          "expected": "billing",
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:update_payment_method_link",
+          "dimension": "tool_recall",
+          "passed": false,
+          "expected": true,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:issue_refund",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:cancel_subscription",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:create_bug_ticket",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "response_any:link",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "link"
+          ],
+          "actual": "",
+          "detail": ""
+        },
+        {
+          "name": "response_any:payment|card",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "payment",
+            "card"
+          ],
+          "actual": "",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": false,
+          "actual": true,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 5.04261040687561,
+      "response": "",
+      "final_state": {
+        "resolution_status": "escalated",
+        "escalation_reason": "tool_call_failed",
+        "category": null,
+        "pending_categories": [],
+        "confidence": 0.0,
+        "clarify_attempts": 0,
+        "turn_count": 0,
+        "interrupted": true,
+        "interrupt_payload": {
+          "escalation_reason": "tool_call_failed",
+          "category": null,
+          "confidence": 0.0,
+          "reasoning": "tool_call_failed — Classification LLM call failed: Error code: 400 - {'error': {'message': \"Tool call validation failed: tool call validation failed: attempted to call tool 'classificationResult' which was not in request.tools\", 'type': 'invalid_request_error', 'code': 'tool_use_failed', 'failed_generation': '{\"name\": \"classificationResult\", \"arguments\": {\"category\":[\"billing\"],\"confidence\":0.95,\"is_smalltalk\":false,\"reasoning\":\"The user reports a card decline and difficulty updating payment info, which is a billing issue. No other categories apply. The request is clear and specific.\",\"wants_human\":false}}'}}",
+          "proposed_action": null,
+          "conversation_summary": "Hi, my card was declined and I can't figure out how to update my payment info. Can you help?"
+        }
+      },
+      "tool_calls": [],
+      "transcript": []
+    },
+    {
+      "eval_id": "EVAL-002",
+      "name": "Billing - plan upgrade with proration",
+      "area": "billing",
+      "passed": false,
+      "score": 0.75,
+      "checks": [
+        {
+          "name": "router_category",
+          "dimension": "routing",
+          "passed": true,
+          "expected": [
+            "billing"
+          ],
+          "actual": [
+            "billing"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "confidence_min",
+          "dimension": "routing",
+          "passed": true,
+          "expected": ">= 0.75",
+          "actual": 0.95,
+          "detail": ""
+        },
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": true,
+          "expected": "billing",
+          "actual": [
+            "billing"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:get_subscription",
+          "dimension": "tool_recall",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        },
+        {
+          "name": "tool_called:change_subscription_plan",
+          "dimension": "tool_recall",
+          "passed": false,
+          "expected": true,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:apply_credit",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:issue_refund",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_args:change_subscription_plan",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": {
+            "new_tier": "business"
+          },
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "tool_result:change_subscription_plan",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": "immediate_charge",
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "response_any:business",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "business"
+          ],
+          "actual": "It looks like your account is already on the **Business** tier. Your current plan supports up to 100 monitors, and you’re using 18 of them right now. No additi…",
+          "detail": ""
+        },
+        {
+          "name": "response_any:prorat|charge",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "prorat",
+            "charge"
+          ],
+          "actual": "It looks like your account is already on the **Business** tier. Your current plan supports up to 100 monitors, and you’re using 18 of them right now. No additi…",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 1.9958438873291016,
+      "response": "It looks like your account is already on the **Business** tier. Your current plan supports up to 100 monitors, and you’re using 18 of them right now. No additional charge is required at this time. If you have any other questions or need further assistance, just let me know!",
+      "final_state": {
+        "resolution_status": "open",
+        "escalation_reason": null,
+        "category": "billing",
+        "pending_categories": [],
+        "confidence": 0.95,
+        "clarify_attempts": 0,
+        "turn_count": 2,
+        "interrupted": false,
+        "interrupt_payload": null
+      },
+      "tool_calls": [
+        {
+          "name": "get_subscription",
+          "args": {
+            "customer_id": "CUST-0002"
+          }
+        }
+      ],
+      "transcript": [
+        "AI -> TOOL get_subscription({\"customer_id\": \"CUST-0002\"})",
+        "TOOL[get_subscription]: {\"subscription_id\": \"SUB-0002\", \"customer_id\": \"CUST-0002\", \"tier\": \"business\", \"monitor_limit\": 100, \"monitors_used\": 18, \"price_monthly\": \"299.00\", \"account_balance\": \"361.29\", \"discount_percent\": \"0.00\", \"discount_expires_at\": null, \"retention_offer_used\": false, \"status\": \"active\", \"created_at\"…",
+        "AI: It looks like your account is already on the **Business** tier. Your current plan supports up to 100 monitors, and you’re using 18 of them right now. No additional charge is required at this time. If you have any other questions or need further assistance, just let me know!"
+      ]
+    },
+    {
+      "eval_id": "EVAL-003",
+      "name": "Billing - plan downgrade with credit",
+      "area": "billing",
+      "passed": false,
+      "score": 0.09090909090909091,
+      "checks": [
+        {
+          "name": "router_category",
+          "dimension": "routing",
+          "passed": false,
+          "expected": [
+            "billing"
+          ],
+          "actual": null,
+          "detail": ""
+        },
+        {
+          "name": "confidence_min",
+          "dimension": "routing",
+          "passed": false,
+          "expected": ">= 0.75",
+          "actual": 0.0,
+          "detail": ""
+        },
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": false,
+          "expected": "billing",
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:get_subscription",
+          "dimension": "tool_recall",
+          "passed": false,
+          "expected": true,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_called:change_subscription_plan",
+          "dimension": "tool_recall",
+          "passed": false,
+          "expected": true,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:apply_credit",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_args:change_subscription_plan",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": {
+            "new_tier": "team"
+          },
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "tool_result:change_subscription_plan",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": "prorated_delta",
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "response_any:team",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "team"
+          ],
+          "actual": "",
+          "detail": ""
+        },
+        {
+          "name": "response_any:credit|balance",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "credit",
+            "balance"
+          ],
+          "actual": "",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": false,
+          "actual": true,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 4.9276697635650635,
+      "response": "",
+      "final_state": {
+        "resolution_status": "escalated",
+        "escalation_reason": "tool_call_failed",
+        "category": null,
+        "pending_categories": [],
+        "confidence": 0.0,
+        "clarify_attempts": 0,
+        "turn_count": 0,
+        "interrupted": true,
+        "interrupt_payload": {
+          "escalation_reason": "tool_call_failed",
+          "category": null,
+          "confidence": 0.0,
+          "reasoning": "tool_call_failed — Classification LLM call failed: Error code: 400 - {'error': {'message': \"Tool call validation failed: tool call validation failed: attempted to call tool 'classificationResult' which was not in request.tools\", 'type': 'invalid_request_error', 'code': 'tool_use_failed', 'failed_generation': '{\"name\": \"classificationResult\", \"arguments\": {\"category\":[\"billing\"],\"confidence\":0.95,\"is_smalltalk\":false,\"reasoning\":\"The user is requesting a plan downgrade to the Team plan, which is a billing-related request about subscription tier changes.\",\"wants_human\":false}}'}}",
+          "proposed_action": null,
+          "conversation_summary": "We've consolidated services and only need about 20 monitors now. Can you switch us down to the Team plan?"
+        }
+      },
+      "tool_calls": [],
+      "transcript": []
+    },
+    {
+      "eval_id": "EVAL-004",
+      "name": "Billing - goodwill credit (not a plan change)",
+      "area": "billing",
+      "passed": false,
+      "score": 0.6363636363636364,
+      "checks": [
+        {
+          "name": "router_category",
+          "dimension": "routing",
+          "passed": false,
+          "expected": [
+            "billing"
+          ],
+          "actual": [
+            "refund"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "confidence_min",
+          "dimension": "routing",
+          "passed": true,
+          "expected": ">= 0.7",
+          "actual": 0.95,
+          "detail": ""
+        },
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": false,
+          "expected": "billing",
+          "actual": [
+            "refund"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:get_subscription",
+          "dimension": "tool_recall",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        },
+        {
+          "name": "tool_called:apply_credit",
+          "dimension": "tool_recall",
+          "passed": false,
+          "expected": true,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:change_subscription_plan",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_not_called:issue_refund",
+          "dimension": "tool_precision",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "tool_args:apply_credit",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": {
+            "amount": 15
+          },
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "response_any:credit",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "credit"
+          ],
+          "actual": "I’m sorry to hear about the downtime. I can help you get a $15 credit. Would you prefer that as a credit added to your account balance, or would you like a ref…",
+          "detail": ""
+        },
+        {
+          "name": "response_any:account|balance",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "account",
+            "balance"
+          ],
+          "actual": "I’m sorry to hear about the downtime. I can help you get a $15 credit. Would you prefer that as a credit added to your account balance, or would you like a ref…",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 2.6320149898529053,
+      "response": "I’m sorry to hear about the downtime. I can help you get a $15 credit. Would you prefer that as a credit added to your account balance, or would you like a refund to your card instead?",
+      "final_state": {
+        "resolution_status": "open",
+        "escalation_reason": null,
+        "category": "refund",
+        "pending_categories": [],
+        "confidence": 0.95,
+        "clarify_attempts": 0,
+        "turn_count": 2,
+        "interrupted": false,
+        "interrupt_payload": null
+      },
+      "tool_calls": [
+        {
+          "name": "get_subscription",
+          "args": {
+            "customer_id": "CUST-0001"
+          }
+        }
+      ],
+      "transcript": [
+        "AI -> TOOL get_subscription({\"customer_id\": \"CUST-0001\"})",
+        "TOOL[get_subscription]: {\"subscription_id\": \"SUB-0001\", \"customer_id\": \"CUST-0001\", \"tier\": \"starter\", \"monitor_limit\": 5, \"monitors_used\": 4, \"price_monthly\": \"29.00\", \"account_balance\": \"0.00\", \"discount_percent\": \"0.00\", \"discount_expires_at\": null, \"retention_offer_used\": false, \"status\": \"active\", \"created_at\": \"2024…",
+        "AI: I’m sorry to hear about the downtime. I can help you get a $15 credit. Would you prefer that as a credit added to your account balance, or would you like a refund to your card instead?"
+      ]
+    },
+    {
+      "eval_id": "EVAL-028",
+      "name": "Billing - invoice question",
+      "area": "billing",
+      "passed": true,
+      "score": 1.0,
+      "checks": [
+        {
+          "name": "router_category",
+          "dimension": "routing",
+          "passed": true,
+          "expected": [
+            "billing"
+          ],
+          "actual": [
+            "billing"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": true,
+          "expected": "billing",
+          "actual": [
+            "billing"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:get_invoices",
+          "dimension": "tool_recall",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        },
+        {
+          "name": "response_any:invoice",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "invoice"
+          ],
+          "actual": "Here’s the most recent invoice for your account (Invoice INV‑0007):\n\n| Field | Value |\n|-------|-------|\n| Invoice ID | INV‑0007 |\n| Customer ID | CUST‑0004 |\n…",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 21.96358060836792,
+      "response": "Here’s the most recent invoice for your account (Invoice INV‑0007):\n\n| Field | Value |\n|-------|-------|\n| Invoice ID | INV‑0007 |\n| Customer ID | CUST‑0004 |\n| Subscription ID | SUB‑0004 |\n| Amount | $29.00 USD |\n| Status | Paid |\n| Invoice Date | 2026‑08‑15 |\n| Due Date | 2026‑08‑15 |\n| Paid At | 2026‑08‑15 |\n\nIf you need a PDF or a downloadable copy, let me know and I’ll generate one for you.",
+      "final_state": {
+        "resolution_status": "open",
+        "escalation_reason": null,
+        "category": "billing",
+        "pending_categories": [],
+        "confidence": 0.95,
+        "clarify_attempts": 0,
+        "turn_count": 2,
+        "interrupted": false,
+        "interrupt_payload": null
+      },
+      "tool_calls": [
+        {
+          "name": "get_invoices",
+          "args": {
+            "customer_id": "CUST-0004"
+          }
+        }
+      ],
+      "transcript": [
+        "AI -> TOOL get_invoices({\"customer_id\": \"CUST-0004\"})",
+        "TOOL[get_invoices]: {\"count\": 1, \"invoices\": [{\"invoice_id\": \"INV-0007\", \"customer_id\": \"CUST-0004\", \"subscription_id\": \"SUB-0004\", \"amount\": \"29.00\", \"currency\": \"USD\", \"status\": \"paid\", \"invoice_date\": \"2026-08-15\", \"due_date\": \"2026-08-15\", \"paid_at\": \"2026-08-15\", \"failure_reason\": null}]}",
+        "AI: Here’s the most recent invoice for your account (Invoice INV‑0007):\n\n| Field | Value |\n|-------|-------|\n| Invoice ID | INV‑0007 |\n| Customer ID | CUST‑0004 |\n| Subscription ID | SUB‑0004 |\n| Amount | $29.00 USD |\n| Status | Paid |\n| Invoice Date | 2026‑08‑15 |\n| Due Date | 2026‑08‑15 |\n| Paid At | 2026‑08‑15 |\n\nIf you need a PDF or a downloadable copy, let me know and I’ll generate one for you."
+      ]
+    },
+    {
+      "eval_id": "EVAL-032",
+      "name": "Billing - already on requested plan",
+      "area": "billing",
+      "passed": false,
+      "score": 0.0,
+      "checks": [
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": false,
+          "expected": "billing",
+          "actual": [],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:get_subscription",
+          "dimension": "tool_recall",
+          "passed": false,
+          "expected": true,
+          "actual": false,
+          "detail": ""
+        },
+        {
+          "name": "response_any:already",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "already"
+          ],
+          "actual": "",
+          "detail": ""
+        },
+        {
+          "name": "response_any:team",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "team"
+          ],
+          "actual": "",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": false,
+          "expected": false,
+          "actual": true,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 8.154656171798706,
+      "response": "",
+      "final_state": {
+        "resolution_status": "escalated",
+        "escalation_reason": "tool_call_failed",
+        "category": null,
+        "pending_categories": [],
+        "confidence": 0.0,
+        "clarify_attempts": 0,
+        "turn_count": 0,
+        "interrupted": true,
+        "interrupt_payload": {
+          "escalation_reason": "tool_call_failed",
+          "category": null,
+          "confidence": 0.0,
+          "reasoning": "tool_call_failed — Classification LLM call failed: Error code: 400 - {'error': {'message': \"Tool call validation failed: tool call validation failed: attempted to call tool 'classificationResult' which was not in request.tools\", 'type': 'invalid_request_error', 'code': 'tool_use_failed', 'failed_generation': '{\"name\": \"classificationResult\", \"arguments\": {\"category\":[\"billing\"],\"confidence\":0.95,\"is_smalltalk\":false,\"reasoning\":\"The user is requesting a plan upgrade to the Team plan, which is a billing-related request. No other categories apply. The request is clear and unambiguous.\",\"wants_human\":false}}'}}",
+          "proposed_action": null,
+          "conversation_summary": "Can you switch me to the Team plan please?"
+        }
+      },
+      "tool_calls": [],
+      "transcript": []
+    },
+    {
+      "eval_id": "EVAL-033",
+      "name": "Billing - payment method update",
+      "area": "billing",
+      "passed": true,
+      "score": 1.0,
+      "checks": [
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": true,
+          "expected": "billing",
+          "actual": [
+            "billing"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:update_payment_method_link",
+          "dimension": "tool_recall",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        },
+        {
+          "name": "response_any:link",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "link"
+          ],
+          "actual": "Sure thing! Here’s a secure, one‑time link that will let you update your payment information right away:\n\n[Update Payment Method](https://billing.pulsecheck.co…",
+          "detail": ""
+        },
+        {
+          "name": "response_any:update",
+          "dimension": "response",
+          "passed": true,
+          "expected": [
+            "update"
+          ],
+          "actual": "Sure thing! Here’s a secure, one‑time link that will let you update your payment information right away:\n\n[Update Payment Method](https://billing.pulsecheck.co…",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 16.947852849960327,
+      "response": "Sure thing! Here’s a secure, one‑time link that will let you update your payment information right away:\n\n[Update Payment Method](https://billing.pulsecheck.com/update-card/session_cust-0011_8a9b2c)\n\nJust click the link, follow the prompts, and your new card will be on file before the old one is cancelled. Let me know if you run into any issues!",
+      "final_state": {
+        "resolution_status": "open",
+        "escalation_reason": null,
+        "category": "billing",
+        "pending_categories": [],
+        "confidence": 0.95,
+        "clarify_attempts": 0,
+        "turn_count": 2,
+        "interrupted": false,
+        "interrupt_payload": null
+      },
+      "tool_calls": [
+        {
+          "name": "update_payment_method_link",
+          "args": {
+            "customer_id": "CUST-0011"
+          }
+        }
+      ],
+      "transcript": [
+        "AI -> TOOL update_payment_method_link({\"customer_id\": \"CUST-0011\"})",
+        "TOOL[update_payment_method_link]: https://billing.pulsecheck.com/update-card/session_cust-0011_8a9b2c",
+        "AI: Sure thing! Here’s a secure, one‑time link that will let you update your payment information right away:\n\n[Update Payment Method](https://billing.pulsecheck.com/update-card/session_cust-0011_8a9b2c)\n\nJust click the link, follow the prompts, and your new card will be on file before the old one is cancelled. Let me know if you run into any issues!"
+      ]
+    },
+    {
+      "eval_id": "EVAL-039",
+      "name": "Billing - unknown customer (404)",
+      "area": "billing",
+      "passed": false,
+      "score": 0.75,
+      "checks": [
+        {
+          "name": "specialist",
+          "dimension": "routing",
+          "passed": true,
+          "expected": "billing",
+          "actual": [
+            "billing"
+          ],
+          "detail": ""
+        },
+        {
+          "name": "tool_called:get_subscription",
+          "dimension": "tool_recall",
+          "passed": true,
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        },
+        {
+          "name": "response_any:not found|couldn't find|could not find|unable to find|can't find|cannot find|no subscription|don't see",
+          "dimension": "response",
+          "passed": false,
+          "expected": [
+            "not found",
+            "couldn't find",
+            "could not find",
+            "unable to find",
+            "can't find",
+            "cannot find",
+            "no subscription",
+            "don't see"
+          ],
+          "actual": "I’m sorry, but I couldn’t locate a subscription for the ID **CUST‑9999** in our system. Could you double‑check that ID or let me know the email address associa…",
+          "detail": ""
+        },
+        {
+          "name": "escalated",
+          "dimension": "guardrail",
+          "passed": true,
+          "expected": false,
+          "actual": false,
+          "detail": ""
+        }
+      ],
+      "error": null,
+      "duration_s": 24.310335159301758,
+      "response": "I’m sorry, but I couldn’t locate a subscription for the ID **CUST‑9999** in our system. Could you double‑check that ID or let me know the email address associated with your account? Once I have the correct details, I’ll be happy to pull up your subscription information.",
+      "final_state": {
+        "resolution_status": "open",
+        "escalation_reason": null,
+        "category": "billing",
+        "pending_categories": [],
+        "confidence": 0.95,
+        "clarify_attempts": 0,
+        "turn_count": 2,
+        "interrupted": false,
+        "interrupt_payload": null
+      },
+      "tool_calls": [
+        {
+          "name": "get_subscription",
+          "args": {
+            "customer_id": "CUST-9999"
+          }
+        }
+      ],
+      "transcript": [
+        "AI -> TOOL get_subscription({\"customer_id\": \"CUST-9999\"})",
+        "TOOL[get_subscription]: {\"error\": \"Failed to fetch subscription: {\\\"detail\\\":\\\"Subscription for CUST-9999 not found\\\"}\"}",
+        "AI: I’m sorry, but I couldn’t locate a subscription for the ID **CUST‑9999** in our system. Could you double‑check that ID or let me know the email address associated with your account? Once I have the correct details, I’ll be happy to pull up your subscription information."
+      ]
+    }
+  ]
+}

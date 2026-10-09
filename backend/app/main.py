@@ -14,9 +14,9 @@ example: sqlite:///./pulsecheck.db
 from __future__ import annotations
 
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta , timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any , Optional
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -34,8 +34,17 @@ try:  # Supports both `uvicorn app.main:app` and `uvicorn main:app`.
         Refund,
         Subscription,
         Ticket,
+        DowntimeEvent,
     )
-    from routes.seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS
+    from routes.seed_data import (
+        CUSTOMERS,
+        KNOWN_INCIDENTS,
+        SUBSCRIPTIONS,
+        TICKETS,
+        INVOICES,
+        REFUNDS,
+        DOWNTIME_EVENTS,
+    )
 except ImportError:  # pragma: no cover - used when running from backend/app.
     from models import (
         Base,
@@ -46,8 +55,66 @@ except ImportError:  # pragma: no cover - used when running from backend/app.
         Refund,
         Subscription,
         Ticket,
+        DowntimeEvent,
     )
-    from routes.seed_data import CUSTOMERS, KNOWN_INCIDENTS, SUBSCRIPTIONS, TICKETS
+    from routes.seed_data import (
+        CUSTOMERS,
+        KNOWN_INCIDENTS,
+        SUBSCRIPTIONS,
+        TICKETS,
+        INVOICES,
+        REFUNDS,
+        DOWNTIME_EVENTS,
+    )
+
+# backend/app/services/billing.py
+from decimal import Decimal
+from dateutil.relativedelta import relativedelta
+
+# ---------------------------------------------------------------------------
+# Plan-change proration
+# ---------------------------------------------------------------------------
+PLAN_PRICES = {"starter": Decimal("29.00"), "team": Decimal("99.00"), "business": Decimal("299.00")}
+PLAN_LIMITS = {"starter": 5, "team": 25, "business": 100}
+
+
+def compute_plan_change(subscription: Subscription, new_tier: str, today: date) -> dict:
+    billing_date = subscription.next_billing_date
+    if billing_date is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change plan: subscription has no active billing cycle.",
+        )
+    if isinstance(billing_date, str):
+        billing_date = date.fromisoformat(billing_date)
+    elif isinstance(billing_date, datetime):
+        billing_date = billing_date.date()
+
+    # NOTE: this guard must stay AFTER days_remaining is assigned.
+    days_remaining = (billing_date - today).days
+    if days_remaining < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot prorate: the current billing period has already ended (account may be past due).",
+        )
+
+    cycle_start = billing_date - relativedelta(months=1)
+    days_in_cycle = (billing_date - cycle_start).days
+
+    old_price = Decimal(str(subscription.price_monthly))
+    new_price = Decimal(str(PLAN_PRICES[new_tier]))
+
+    unused_value_old = old_price * Decimal(days_remaining) / Decimal(days_in_cycle)
+    cost_new_remaining = new_price * Decimal(days_remaining) / Decimal(days_in_cycle)
+    delta = (unused_value_old - cost_new_remaining).quantize(Decimal("0.01"))
+
+    return {
+        "old_tier": subscription.tier,
+        "new_tier": new_tier,
+        "days_remaining": days_remaining,
+        "days_in_cycle": days_in_cycle,
+        "prorated_delta": delta,
+    }
 
 
 DATABASE_URL = os.getenv("PULSECHECK_DATABASE_URL", "sqlite:///./pulsecheck.db")
@@ -91,6 +158,10 @@ class SubscriptionRead(ORMModel):
     monitor_limit: int
     monitors_used: int
     price_monthly: Decimal
+    account_balance: Decimal 
+    discount_percent: Decimal            
+    discount_expires_at: date | None    
+    retention_offer_used: bool                     
     status: str
     created_at: date
     next_billing_date: date | None
@@ -98,6 +169,11 @@ class SubscriptionRead(ORMModel):
     cancelled_at: date | None
     failed_payment_count: int
     payment_method_last4: str | None
+class CancelSubscriptionRequest(BaseModel):
+    confirmed: bool = Field(
+        description="Must be true. Only set true after the customer has "
+                     "explicitly confirmed cancellation with a yes/no answer."
+    )
 
 
 class InvoiceRead(ORMModel):
@@ -131,7 +207,9 @@ class RefundCreate(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
     ticket_id: str | None = None
     currency: str = Field(default="USD", min_length=3, max_length=3)
-
+    confirmed: bool = Field(
+        description="Must be true — only set after the customer explicitly confirmed the exact refund amount."
+    )
 
 class RefundRead(ORMModel):
     refund_id: str
@@ -173,6 +251,20 @@ class TicketCreate(BaseModel):
     resolution_notes: str | None = None
 
 
+class TicketSummary(BaseModel):
+    ticket_id: str
+    category: str
+    subtype: Optional[str]
+    subject: str
+    message: str
+    status: str
+    created_at: datetime
+    resolved_at: Optional[datetime]
+    resolution_notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
 class TicketUpdate(BaseModel):
     category: str | None = Field(default=None, min_length=1, max_length=20)
     subtype: str | None = Field(default=None, min_length=1, max_length=40)
@@ -209,6 +301,78 @@ class EscalationRead(ORMModel):
     resolved_at: date | None
 
 
+class DowntimeEventSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    event_id: str
+    endpoint_name: str
+    started_at: datetime
+    resolved_at: Optional[datetime]
+    duration_minutes: Optional[int]
+    cause: Optional[str]
+    related_incident_id: Optional[str]
+
+class HistoricalStatsResponse(BaseModel):
+    customer_id: str
+    period_days: int
+    total_events: int
+    total_downtime_minutes: int
+    events_linked_to_known_incident: int
+    by_endpoint: dict[str, int]          # endpoint_name -> event count
+    events: list[DowntimeEventSummary]   # most recent first
+
+
+class ChangePlanRequest(BaseModel):
+    new_tier: str = Field(min_length=1, max_length=20)
+
+
+class ChangePlanResponse(BaseModel):
+    old_tier: str
+    new_tier: str
+    days_remaining: int
+    days_in_cycle: int
+    prorated_delta: Decimal
+    immediate_charge: Decimal
+    new_account_balance: Decimal
+
+
+class CreditRequest(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class CreditResponse(BaseModel):
+    status: str
+    amount_credited: Decimal
+    reason: str
+    new_account_balance: Decimal
+
+## schemas for discount feature
+AUTO_APPROVE_MAX_DISCOUNT_PERCENT = 20
+AUTO_APPROVE_MAX_DURATION_MONTHS = 3
+
+
+class RetentionDiscountRequest(BaseModel):
+    discount_percent: int = Field(ge=5, le=25)
+    duration_months: int = Field(ge=1, le=6)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class RetentionDiscountResponse(BaseModel):
+    status: str  # "applied" | "pending_review"
+    customer_id: str
+    discount_percent: int
+    duration_months: int
+    discount_expires_at: date
+    reason: str
+    message: str
+
+class CancelSubscriptionResponse(BaseModel):
+    status: str
+    customer_id: str
+    cancelled_at: date
+    message: str
+
+
 # ---------------------------------------------------------------------------
 # Database helpers and startup seed
 # ---------------------------------------------------------------------------
@@ -226,18 +390,32 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:12].upper()}"
 
 
-def seed_database() -> None:
-    """Create tables and load seed_data.py exactly once for an empty database."""
+def seed_database(force: bool = False) -> None:
+    """Create tables and load seed_data.py for an empty database or when forced."""
+    if force:
+        Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
-        already_seeded = db.scalar(select(Customer.customer_id).limit(1)) is not None
-        if already_seeded:
-            return
+        if not force:
+            try:
+                # Check both table existence and new column integrity
+                sub_check = db.scalar(select(Subscription.account_balance).limit(1))
+                already_seeded = db.scalar(select(Customer.customer_id).limit(1)) is not None
+                if already_seeded:
+                    return
+            except Exception:
+                # Outdated schema (missing columns) -> drop and reseed cleanly
+                db.rollback()
+                Base.metadata.drop_all(bind=engine)
+                Base.metadata.create_all(bind=engine)
 
         db.add_all(Customer(**row) for row in CUSTOMERS)
         db.add_all(Subscription(**row) for row in SUBSCRIPTIONS)
         db.add_all(Ticket(**row) for row in TICKETS)
         db.add_all(KnownIncident(**row) for row in KNOWN_INCIDENTS)
+        db.add_all(Invoice(**row) for row in INVOICES)
+        db.add_all(Refund(**row) for row in REFUNDS)
+        db.add_all(DowntimeEvent(**row) for row in DOWNTIME_EVENTS)
         db.commit()
 
 
@@ -260,6 +438,15 @@ def root() -> dict[str, str]:
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
+
+@app.post("/admin/reseed", tags=["admin"])
+def admin_reseed() -> dict[str, str]:
+    """Dev/eval only: drop every table and reload the seed data."""
+    if os.getenv("PULSECHECK_ENABLE_ADMIN", "1") != "1":
+        raise HTTPException(status_code=404, detail="Not found")
+    seed_database(force=True)
+    return {"status": "reseeded"}
 
 @app.get("/customers/{customer_id}", response_model=CustomerRead, tags=["customers"])
 def get_customer(customer_id: str, db: Session = Depends(get_db)) -> Customer:
@@ -298,11 +485,41 @@ def get_incidents(
     db: Session = Depends(get_db),
 ) -> list[KnownIncident]:
     statement = select(KnownIncident).order_by(KnownIncident.started_at.desc())
-    if status_filter is not None:
+    if status_filter == "open":
+        statement = statement.where(KnownIncident.status.in_(["open", "monitoring"]))
+    elif status_filter is not None:
         statement = statement.where(KnownIncident.status == status_filter)
     return list(db.scalars(statement))
 
+@app.get("/monitors/{customer_id}/stats", response_model=HistoricalStatsResponse)
+def get_historical_stats(
+    customer_id: str,
+    days: int = Query(30, ge=1, le=365),
+    session: Session = Depends(get_db),  # <-- FIXED: Variable is lowercase 'session', type is 'Session'
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    stmt = (
+        select(DowntimeEvent)
+        .where(DowntimeEvent.customer_id == customer_id)
+        .where(DowntimeEvent.started_at >= cutoff)
+        .order_by(DowntimeEvent.started_at.desc())
+    )
+    # This will now work perfectly because 'session' is properly defined above
+    events = session.execute(stmt).scalars().all() 
 
+    by_endpoint: dict[str, int] = {}
+    for e in events:
+        by_endpoint[e.endpoint_name] = by_endpoint.get(e.endpoint_name, 0) + 1
+
+    return HistoricalStatsResponse(
+        customer_id=customer_id,
+        period_days=days,
+        total_events=len(events),
+        total_downtime_minutes=sum(e.duration_minutes or 0 for e in events),
+        events_linked_to_known_incident=sum(1 for e in events if e.related_incident_id),
+        by_endpoint=by_endpoint,
+        events=[DowntimeEventSummary.model_validate(e) for e in events],
+    )
 # ---------------------------------------------------------------------------
 # Refunds: the explicit business guardrail
 # ---------------------------------------------------------------------------
@@ -314,6 +531,11 @@ def issue_refund(payload: RefundCreate, db: Session = Depends(get_db)) -> Refund
         raise HTTPException(status_code=404, detail=f"Customer {payload.customer_id} not found")
     if payload.ticket_id is not None and db.get(Ticket, payload.ticket_id) is None:
         raise HTTPException(status_code=404, detail=f"Ticket {payload.ticket_id} not found")
+
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Refund requires explicit customer confirmation.")
+    if db.get(Customer, payload.customer_id) is None:
+        raise HTTPException(status_code=404, detail=f"Customer {payload.customer_id} not found")
 
     # Strictly under $100 is auto-approved. Exactly $100 or more requires review.
     auto_approved = payload.amount < Decimal("100.00")
@@ -348,6 +570,84 @@ def issue_refund(payload: RefundCreate, db: Session = Depends(get_db)) -> Refund
             else "Refund created and queued for human approval."
         ),
     )
+
+
+@app.post(
+    "/subscriptions/{customer_id}/retention-discount",
+    response_model=RetentionDiscountResponse,
+    tags=["subscriptions"],
+)
+def apply_retention_discount(
+    customer_id: str, payload: RetentionDiscountRequest, db: Session = Depends(get_db)
+) -> RetentionDiscountResponse:
+    sub = _get_subscription_or_404(db, customer_id)
+
+    if sub.retention_offer_used:
+        raise HTTPException(
+            status_code=409,
+            detail="A retention discount has already been used on this account.",
+        )
+
+    auto_approved = (
+        payload.discount_percent <= AUTO_APPROVE_MAX_DISCOUNT_PERCENT
+        and payload.duration_months <= AUTO_APPROVE_MAX_DURATION_MONTHS
+    )
+    expires_at = date.today() + relativedelta(months=payload.duration_months)
+
+    if not auto_approved:
+        return RetentionDiscountResponse(
+            status="pending_review",
+            customer_id=customer_id,
+            discount_percent=payload.discount_percent,
+            duration_months=payload.duration_months,
+            discount_expires_at=expires_at,
+            reason=payload.reason,
+            message=(
+                f"A {payload.discount_percent}% discount for {payload.duration_months} months "
+                "exceeds the self-service limit and requires manager approval."
+            ),
+        )
+
+    sub.discount_percent = Decimal(payload.discount_percent)
+    sub.discount_expires_at = expires_at
+    sub.retention_offer_used = True
+    db.commit()
+    db.refresh(sub)
+
+    return RetentionDiscountResponse(
+        status="applied",
+        customer_id=customer_id,
+        discount_percent=payload.discount_percent,
+        duration_months=payload.duration_months,
+        discount_expires_at=expires_at,
+        reason=payload.reason,
+        message=f"Applied a {payload.discount_percent}% discount for {payload.duration_months} months, expiring {expires_at.isoformat()}.",
+    )
+
+
+@app.post("/subscriptions/{customer_id}/cancel", response_model=CancelSubscriptionResponse, tags=["subscriptions"])
+def cancel_subscription_endpoint(
+    customer_id: str, payload: CancelSubscriptionRequest, db: Session = Depends(get_db)
+) -> CancelSubscriptionResponse:
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Cancellation requires explicit customer confirmation.")
+
+    sub = _get_subscription_or_404(db, customer_id)
+    if sub.status == "cancelled":
+        raise HTTPException(status_code=409, detail=f"Subscription for {customer_id} is already cancelled.")
+
+    sub.status = "cancelled"
+    sub.cancelled_at = date.today()
+    db.commit()
+    db.refresh(sub)
+
+    return CancelSubscriptionResponse(
+        status="cancelled",
+        customer_id=customer_id,
+        cancelled_at=sub.cancelled_at,
+        message="Subscription has been cancelled and will not renew.",
+    )
+
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +706,121 @@ def update_ticket(ticket_id: str, payload: TicketUpdate, db: Session = Depends(g
     return ticket
 
 
+@app.get("/tickets", response_model=list[TicketSummary], tags=["tickets"])
+def get_recent_tickets(
+    customer_id: str = Query(...),
+    category: Optional[str] = Query(None),
+    days: int = Query(3, ge=1, le=30, description="How many days back to look"),
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db) # <--- FIXED: Matches your other functions
+) -> list[Ticket]:
+    """
+    Returns recent tickets for a specific customer.
+    Used by the AI Agent for the "Local Deduplication Double Check".
+    """
+    
+    # FIXED: Since TicketCreate uses 'date' for created_at, we must use 'date' here, not datetime.
+    cutoff_date = date.today() - timedelta(days=days)
+    
+    # Build the base query using the standard ORM pattern that matches your file
+    query = db.query(Ticket).filter(
+        Ticket.customer_id == customer_id,
+        Ticket.created_at >= cutoff_date
+    )
+    
+    # Add optional category filter if provided
+    if category:
+        query = query.filter(Ticket.category == category)
+        
+    # Execute the query with sorting and limits
+    tickets = query.order_by(Ticket.created_at.desc()).limit(limit).all()
+    
+    return tickets
+
+#--------------------------------------------------------------------------
+# billing methods
+#--------------------------------------------------------------------------
+
+def _get_subscription_or_404(db: Session, customer_id: str) -> Subscription:
+    subscription = db.scalar(
+        select(Subscription).where(Subscription.customer_id == customer_id)
+    )
+    if subscription is None:
+        raise HTTPException(status_code=404, detail=f"Subscription for {customer_id} not found")
+    return subscription
+
+
+@app.post("/subscriptions/{customer_id}/change-plan", response_model=ChangePlanResponse, tags=["subscriptions"])
+def change_plan(
+    customer_id: str, payload: ChangePlanRequest, db: Session = Depends(get_db)
+) -> ChangePlanResponse:
+    if payload.new_tier not in PLAN_PRICES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown tier '{payload.new_tier}'. Must be one of {list(PLAN_PRICES)}.",
+        )
+
+    sub = _get_subscription_or_404(db, customer_id)
+
+    if payload.new_tier == sub.tier:
+        raise HTTPException(status_code=400, detail=f"Customer is already on the {sub.tier} plan.")
+
+    today = date.today()
+    result = compute_plan_change(sub, payload.new_tier, today)
+    delta = result["prorated_delta"]
+
+    sub.tier = payload.new_tier
+    sub.price_monthly = PLAN_PRICES[payload.new_tier]
+    sub.monitor_limit = PLAN_LIMITS[payload.new_tier]
+
+    if delta >= 0:
+        sub.account_balance += delta
+        immediate_charge = Decimal("0.00")
+    else:
+        immediate_charge = -delta
+        db.add(Invoice(
+            invoice_id=_new_id("INV"),
+            customer_id=customer_id,
+            subscription_id=sub.subscription_id,
+            amount=immediate_charge,
+            currency="USD",
+            status="paid",
+            invoice_date=today,
+            due_date=today,
+            paid_at=today,
+            failure_reason=None,
+        ))
+
+    db.commit()
+    db.refresh(sub)
+
+    return ChangePlanResponse(
+        old_tier=result["old_tier"],
+        new_tier=result["new_tier"],
+        days_remaining=result["days_remaining"],
+        days_in_cycle=result["days_in_cycle"],
+        prorated_delta=delta,
+        immediate_charge=immediate_charge,
+        new_account_balance=sub.account_balance,
+    )
+
+
+@app.post("/subscriptions/{customer_id}/credit", response_model=CreditResponse, tags=["subscriptions"])
+def apply_account_credit(
+    customer_id: str, payload: CreditRequest, db: Session = Depends(get_db)
+) -> CreditResponse:
+    sub = _get_subscription_or_404(db, customer_id)
+    sub.account_balance += payload.amount
+    db.commit()
+    db.refresh(sub)
+    return CreditResponse(
+        status="success",
+        amount_credited=payload.amount,
+        reason=payload.reason,
+        new_account_balance=sub.account_balance,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Human escalation queue
 # ---------------------------------------------------------------------------
@@ -444,11 +859,14 @@ def create_escalation(payload: EscalationCreate, db: Session = Depends(get_db)) 
 @app.get("/escalations", response_model=list[EscalationRead], tags=["escalations"])
 def list_escalations(
     status_filter: str | None = Query(default="pending", alias="status"),
+    customer_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[Escalation]:
     statement = select(Escalation).order_by(Escalation.created_at.desc())
     if status_filter is not None:
         statement = statement.where(Escalation.status == status_filter)
+    if customer_id is not None:
+        statement = statement.where(Escalation.customer_id == customer_id)
     return list(db.scalars(statement))
 
 

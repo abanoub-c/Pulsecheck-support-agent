@@ -62,31 +62,41 @@ CUSTOMERS = [
 # ---------------------------------------------------------------------------
 
 SUBSCRIPTIONS = [
-    {"subscription_id": "SUB-0001", "customer_id": "CUST-0001", "tier": "starter", "monitor_limit": 5, "monitors_used": 4, "price_monthly": 29, "status": "active", "created_at": "2024-09-12", "next_billing_date": "2026-09-12", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "4242"},
-    {"subscription_id": "SUB-0002", "customer_id": "CUST-0002", "tier": "team", "monitor_limit": 25, "monitors_used": 18, "price_monthly": 99, "status": "active", "created_at": "2024-11-03", "next_billing_date": "2026-09-03", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "1881"},
-    {"subscription_id": "SUB-0003", "customer_id": "CUST-0003", "tier": "business", "monitor_limit": 100, "monitors_used": 76, "price_monthly": 299, "status": "active", "created_at": "2024-08-20", "next_billing_date": "2026-09-20", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "5566"},
-    {"subscription_id": "SUB-0004", "customer_id": "CUST-0004", "tier": "starter", "monitor_limit": 5, "monitors_used": 3, "price_monthly": 29, "status": "active", "created_at": "2025-01-15", "next_billing_date": "2026-09-15", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "0912"},
-    {"subscription_id": "SUB-0005", "customer_id": "CUST-0005", "tier": "team", "monitor_limit": 25, "monitors_used": 22, "price_monthly": 99, "status": "past_due", "created_at": "2025-02-08", "next_billing_date": "2026-08-09", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 2, "payment_method_last4": "7723"},
-    {"subscription_id": "SUB-0006", "customer_id": "CUST-0006", "tier": "business", "monitor_limit": 100, "monitors_used": 54, "price_monthly": 299, "status": "active", "created_at": "2024-10-05", "next_billing_date": "2026-09-05", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "3390"},
-    {"subscription_id": "SUB-0007", "customer_id": "CUST-0007", "tier": "starter", "monitor_limit": 5, "monitors_used": 5, "price_monthly": 29, "status": "active", "created_at": "2025-03-22", "next_billing_date": "2026-09-22", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "6104"},
-    {"subscription_id": "SUB-0008", "customer_id": "CUST-0008", "tier": "team", "monitor_limit": 25, "monitors_used": 12, "price_monthly": 99, "status": "active", "created_at": "2025-04-11", "next_billing_date": "2026-09-11", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "2287"},
-    {"subscription_id": "SUB-0009", "customer_id": "CUST-0009", "tier": "business", "monitor_limit": 100, "monitors_used": 91, "price_monthly": 299, "status": "active", "created_at": "2024-12-01", "next_billing_date": "2026-09-01", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "8845"},
-    {"subscription_id": "SUB-0010", "customer_id": "CUST-0010", "tier": "starter", "monitor_limit": 5, "monitors_used": 2, "price_monthly": 29, "status": "trialing", "created_at": "2026-08-14", "next_billing_date": "2026-08-28", "trial_end_date": "2026-08-28", "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "4471"},
-    {"subscription_id": "SUB-0011", "customer_id": "CUST-0011", "tier": "team", "monitor_limit": 25, "monitors_used": 15, "price_monthly": 99, "status": "active", "created_at": "2025-05-19", "next_billing_date": "2026-09-19", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "1029"},
-    {"subscription_id": "SUB-0012", "customer_id": "CUST-0012", "tier": "business", "monitor_limit": 100, "monitors_used": 88, "price_monthly": 299, "status": "past_due", "created_at": "2025-01-29", "next_billing_date": "2026-08-14", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 1, "payment_method_last4": "5540"},
-    {"subscription_id": "SUB-0013", "customer_id": "CUST-0013", "tier": "starter", "monitor_limit": 5, "monitors_used": 5, "price_monthly": 29, "status": "active", "created_at": "2025-06-14", "next_billing_date": "2026-09-14", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "9902"},
-    {"subscription_id": "SUB-0014", "customer_id": "CUST-0014", "tier": "team", "monitor_limit": 25, "monitors_used": 20, "price_monthly": 99, "status": "active", "created_at": "2025-07-02", "next_billing_date": "2026-09-02", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "3315"},
-    {"subscription_id": "SUB-0015", "customer_id": "CUST-0015", "tier": "business", "monitor_limit": 100, "monitors_used": 40, "price_monthly": 299, "status": "active", "created_at": "2024-09-30", "next_billing_date": "2026-09-30", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "6678"},
-    {"subscription_id": "SUB-0016", "customer_id": "CUST-0016", "tier": "starter", "monitor_limit": 5, "monitors_used": 5, "price_monthly": 29, "status": "past_due", "created_at": "2025-08-25", "next_billing_date": "2026-08-18", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 3, "payment_method_last4": "7791"},
-    {"subscription_id": "SUB-0017", "customer_id": "CUST-0017", "tier": "team", "monitor_limit": 25, "monitors_used": 9, "price_monthly": 99, "status": "active", "created_at": "2025-09-10", "next_billing_date": "2026-09-10", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "2203"},
-    {"subscription_id": "SUB-0018", "customer_id": "CUST-0018", "tier": "starter", "monitor_limit": 5, "monitors_used": 0, "price_monthly": 29, "status": "cancelled", "created_at": "2024-07-18", "next_billing_date": None, "trial_end_date": None, "cancelled_at": "2026-06-01", "failed_payment_count": 0, "payment_method_last4": "4450"},
-    {"subscription_id": "SUB-0019", "customer_id": "CUST-0019", "tier": "team", "monitor_limit": 25, "monitors_used": 25, "price_monthly": 99, "status": "active", "created_at": "2025-10-05", "next_billing_date": "2026-09-05", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "8812"},
-    {"subscription_id": "SUB-0020", "customer_id": "CUST-0020", "tier": "starter", "monitor_limit": 5, "monitors_used": 1, "price_monthly": 29, "status": "trialing", "created_at": "2026-08-10", "next_billing_date": "2026-08-24", "trial_end_date": "2026-08-24", "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "3367"},
-    {"subscription_id": "SUB-0021", "customer_id": "CUST-0021", "tier": "team", "monitor_limit": 25, "monitors_used": 17, "price_monthly": 99, "status": "active", "created_at": "2025-11-12", "next_billing_date": "2026-09-12", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "5529"},
-    {"subscription_id": "SUB-0022", "customer_id": "CUST-0022", "tier": "starter", "monitor_limit": 5, "monitors_used": 2, "price_monthly": 29, "status": "active", "created_at": "2025-12-01", "next_billing_date": "2026-09-01", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "9013"},
-    {"subscription_id": "SUB-0023", "customer_id": "CUST-0023", "tier": "team", "monitor_limit": 25, "monitors_used": 24, "price_monthly": 99, "status": "past_due", "created_at": "2025-02-20", "next_billing_date": "2026-08-20", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 1, "payment_method_last4": "6650"},
-    {"subscription_id": "SUB-0024", "customer_id": "CUST-0024", "tier": "starter", "monitor_limit": 5, "monitors_used": 4, "price_monthly": 29, "status": "active", "created_at": "2026-01-15", "next_billing_date": "2026-09-15", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "1147"},
-    {"subscription_id": "SUB-0025", "customer_id": "CUST-0025", "tier": "starter", "monitor_limit": 5, "monitors_used": 0, "price_monthly": 29, "status": "cancelled", "created_at": "2024-06-05", "next_billing_date": None, "trial_end_date": None, "cancelled_at": "2026-07-10", "failed_payment_count": 0, "payment_method_last4": "2298"},
+    # account_balance: any goodwill/proration credit on the account (applied to next invoice)
+    # discount_percent: active retention discount (0.00 = none)
+    # discount_expires_at: when the discount lapses (None = no active discount)
+    # retention_offer_used: True = a retention discount was already offered once (can't offer again)
+    {"subscription_id": "SUB-0001", "customer_id": "CUST-0001", "tier": "starter", "monitor_limit": 5, "monitors_used": 4, "price_monthly": 29, "status": "active", "created_at": "2024-09-12", "next_billing_date": "2026-09-12", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "4242", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0002", "customer_id": "CUST-0002", "tier": "team", "monitor_limit": 25, "monitors_used": 18, "price_monthly": 99, "status": "active", "created_at": "2024-11-03", "next_billing_date": "2026-09-03", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "1881", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0003", "customer_id": "CUST-0003", "tier": "business", "monitor_limit": 100, "monitors_used": 76, "price_monthly": 299, "status": "active", "created_at": "2024-08-20", "next_billing_date": "2026-09-20", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "5566", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0004", "customer_id": "CUST-0004", "tier": "starter", "monitor_limit": 5, "monitors_used": 3, "price_monthly": 29, "status": "active", "created_at": "2025-01-15", "next_billing_date": "2026-09-15", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "0912", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    # CUST-0005: past_due — has a small goodwill credit from last cycle's failed-charge apology
+    {"subscription_id": "SUB-0005", "customer_id": "CUST-0005", "tier": "team", "monitor_limit": 25, "monitors_used": 22, "price_monthly": 99, "status": "past_due", "created_at": "2025-02-08", "next_billing_date": "2026-08-09", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 2, "payment_method_last4": "7723", "account_balance": "15.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    # CUST-0006: already used retention offer (downgraded Business→Team, was given 10% for 2 months)
+    {"subscription_id": "SUB-0006", "customer_id": "CUST-0006", "tier": "business", "monitor_limit": 100, "monitors_used": 54, "price_monthly": 299, "status": "active", "created_at": "2024-10-05", "next_billing_date": "2026-09-05", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "3390", "account_balance": "0.00", "discount_percent": "10.00", "discount_expires_at": "2026-11-05", "retention_offer_used": True},
+    {"subscription_id": "SUB-0007", "customer_id": "CUST-0007", "tier": "starter", "monitor_limit": 5, "monitors_used": 5, "price_monthly": 29, "status": "active", "created_at": "2025-03-22", "next_billing_date": "2026-09-22", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "6104", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0008", "customer_id": "CUST-0008", "tier": "team", "monitor_limit": 25, "monitors_used": 12, "price_monthly": 99, "status": "active", "created_at": "2025-04-11", "next_billing_date": "2026-09-11", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "2287", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0009", "customer_id": "CUST-0009", "tier": "business", "monitor_limit": 100, "monitors_used": 91, "price_monthly": 299, "status": "active", "created_at": "2024-12-01", "next_billing_date": "2026-09-01", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "8845", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0010", "customer_id": "CUST-0010", "tier": "starter", "monitor_limit": 5, "monitors_used": 2, "price_monthly": 29, "status": "trialing", "created_at": "2026-08-14", "next_billing_date": "2026-08-28", "trial_end_date": "2026-08-28", "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "4471", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0011", "customer_id": "CUST-0011", "tier": "team", "monitor_limit": 25, "monitors_used": 15, "price_monthly": 99, "status": "active", "created_at": "2025-05-19", "next_billing_date": "2026-09-19", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "1029", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    # CUST-0012: past_due business — has a credit from a partial refund on the failed billing cycle
+    {"subscription_id": "SUB-0012", "customer_id": "CUST-0012", "tier": "business", "monitor_limit": 100, "monitors_used": 88, "price_monthly": 299, "status": "past_due", "created_at": "2025-01-29", "next_billing_date": "2026-08-14", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 1, "payment_method_last4": "5540", "account_balance": "50.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0013", "customer_id": "CUST-0013", "tier": "starter", "monitor_limit": 5, "monitors_used": 5, "price_monthly": 29, "status": "active", "created_at": "2025-06-14", "next_billing_date": "2026-09-14", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "9902", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0014", "customer_id": "CUST-0014", "tier": "team", "monitor_limit": 25, "monitors_used": 20, "price_monthly": 99, "status": "active", "created_at": "2025-07-02", "next_billing_date": "2026-09-02", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "3315", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    # CUST-0015: considering downgrade — has a 15% retention discount active to prevent churn
+    {"subscription_id": "SUB-0015", "customer_id": "CUST-0015", "tier": "business", "monitor_limit": 100, "monitors_used": 40, "price_monthly": 299, "status": "active", "created_at": "2024-09-30", "next_billing_date": "2026-09-30", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "6678", "account_balance": "0.00", "discount_percent": "15.00", "discount_expires_at": "2026-12-30", "retention_offer_used": True},
+    # CUST-0016: past_due, 3 failed payments — no credits, no discount
+    {"subscription_id": "SUB-0016", "customer_id": "CUST-0016", "tier": "starter", "monitor_limit": 5, "monitors_used": 5, "price_monthly": 29, "status": "past_due", "created_at": "2025-08-25", "next_billing_date": "2026-08-18", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 3, "payment_method_last4": "7791", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0017", "customer_id": "CUST-0017", "tier": "team", "monitor_limit": 25, "monitors_used": 9, "price_monthly": 99, "status": "active", "created_at": "2025-09-10", "next_billing_date": "2026-09-10", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "2203", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0018", "customer_id": "CUST-0018", "tier": "starter", "monitor_limit": 5, "monitors_used": 0, "price_monthly": 29, "status": "cancelled", "created_at": "2024-07-18", "next_billing_date": None, "trial_end_date": None, "cancelled_at": "2026-06-01", "failed_payment_count": 0, "payment_method_last4": "4450", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0019", "customer_id": "CUST-0019", "tier": "team", "monitor_limit": 25, "monitors_used": 25, "price_monthly": 99, "status": "active", "created_at": "2025-10-05", "next_billing_date": "2026-09-05", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "8812", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0020", "customer_id": "CUST-0020", "tier": "starter", "monitor_limit": 5, "monitors_used": 1, "price_monthly": 29, "status": "trialing", "created_at": "2026-08-10", "next_billing_date": "2026-08-24", "trial_end_date": "2026-08-24", "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "3367", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0021", "customer_id": "CUST-0021", "tier": "team", "monitor_limit": 25, "monitors_used": 17, "price_monthly": 99, "status": "active", "created_at": "2025-11-12", "next_billing_date": "2026-09-12", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "5529", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0022", "customer_id": "CUST-0022", "tier": "starter", "monitor_limit": 5, "monitors_used": 2, "price_monthly": 29, "status": "active", "created_at": "2025-12-01", "next_billing_date": "2026-09-01", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "9013", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    # CUST-0023: past_due — small goodwill credit applied while card situation is sorted
+    {"subscription_id": "SUB-0023", "customer_id": "CUST-0023", "tier": "team", "monitor_limit": 25, "monitors_used": 24, "price_monthly": 99, "status": "past_due", "created_at": "2025-02-20", "next_billing_date": "2026-08-20", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 1, "payment_method_last4": "6650", "account_balance": "10.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0024", "customer_id": "CUST-0024", "tier": "starter", "monitor_limit": 5, "monitors_used": 4, "price_monthly": 29, "status": "active", "created_at": "2026-01-15", "next_billing_date": "2026-09-15", "trial_end_date": None, "cancelled_at": None, "failed_payment_count": 0, "payment_method_last4": "1147", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
+    {"subscription_id": "SUB-0025", "customer_id": "CUST-0025", "tier": "starter", "monitor_limit": 5, "monitors_used": 0, "price_monthly": 29, "status": "cancelled", "created_at": "2024-06-05", "next_billing_date": None, "trial_end_date": None, "cancelled_at": "2026-07-10", "failed_payment_count": 0, "payment_method_last4": "2298", "account_balance": "0.00", "discount_percent": "0.00", "discount_expires_at": None, "retention_offer_used": False},
 ]
 
 # ---------------------------------------------------------------------------
@@ -243,14 +253,193 @@ KNOWN_INCIDENTS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Invoices (historical billing records — one or two per active customer)
+# Fields: invoice_id, customer_id, subscription_id, amount, currency,
+#         status (paid | unpaid | failed | void), invoice_date, due_date, paid_at, failure_reason
+# ---------------------------------------------------------------------------
+
+INVOICES = [
+    # CUST-0001 — Starter, paid up to date
+    {"invoice_id": "INV-0001", "customer_id": "CUST-0001", "subscription_id": "SUB-0001", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-12", "due_date": "2026-08-12", "paid_at": "2026-08-12", "failure_reason": None},
+    {"invoice_id": "INV-0002", "customer_id": "CUST-0001", "subscription_id": "SUB-0001", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-12", "due_date": "2026-07-12", "paid_at": "2026-07-12", "failure_reason": None},
+    # CUST-0002 — Team, paid up to date
+    {"invoice_id": "INV-0003", "customer_id": "CUST-0002", "subscription_id": "SUB-0002", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-03", "due_date": "2026-08-03", "paid_at": "2026-08-03", "failure_reason": None},
+    {"invoice_id": "INV-0004", "customer_id": "CUST-0002", "subscription_id": "SUB-0002", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-03", "due_date": "2026-07-03", "paid_at": "2026-07-03", "failure_reason": None},
+    # CUST-0003 — Business, paid. Includes a proration line from TICK-0010 mid-cycle upgrade
+    {"invoice_id": "INV-0005", "customer_id": "CUST-0003", "subscription_id": "SUB-0003", "amount": "299.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-20", "due_date": "2026-08-20", "paid_at": "2026-08-20", "failure_reason": None},
+    {"invoice_id": "INV-0006", "customer_id": "CUST-0003", "subscription_id": "SUB-0003", "amount": "152.19", "currency": "USD", "status": "paid", "invoice_date": "2026-05-20", "due_date": "2026-05-20", "paid_at": "2026-05-20", "failure_reason": None},
+    # CUST-0004 — Starter, paid
+    {"invoice_id": "INV-0007", "customer_id": "CUST-0004", "subscription_id": "SUB-0004", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-15", "due_date": "2026-08-15", "paid_at": "2026-08-15", "failure_reason": None},
+    # CUST-0005 — Team, past_due: most recent invoice failed twice
+    {"invoice_id": "INV-0008", "customer_id": "CUST-0005", "subscription_id": "SUB-0005", "amount": "99.00", "currency": "USD", "status": "failed", "invoice_date": "2026-08-09", "due_date": "2026-08-09", "paid_at": None, "failure_reason": "Card declined: insufficient funds"},
+    {"invoice_id": "INV-0009", "customer_id": "CUST-0005", "subscription_id": "SUB-0005", "amount": "99.00", "currency": "USD", "status": "failed", "invoice_date": "2026-07-09", "due_date": "2026-07-09", "paid_at": None, "failure_reason": "Card declined: do not honor"},
+    {"invoice_id": "INV-0010", "customer_id": "CUST-0005", "subscription_id": "SUB-0005", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-06-09", "due_date": "2026-06-09", "paid_at": "2026-06-09", "failure_reason": None},
+    # CUST-0006 — Business, active; discount applied (see SUB-0006: 10% retention)
+    {"invoice_id": "INV-0011", "customer_id": "CUST-0006", "subscription_id": "SUB-0006", "amount": "269.10", "currency": "USD", "status": "paid", "invoice_date": "2026-08-05", "due_date": "2026-08-05", "paid_at": "2026-08-05", "failure_reason": None},
+    {"invoice_id": "INV-0012", "customer_id": "CUST-0006", "subscription_id": "SUB-0006", "amount": "299.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-05", "due_date": "2026-07-05", "paid_at": "2026-07-05", "failure_reason": None},
+    # CUST-0007 — Starter, paid
+    {"invoice_id": "INV-0013", "customer_id": "CUST-0007", "subscription_id": "SUB-0007", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-22", "due_date": "2026-08-22", "paid_at": "2026-08-22", "failure_reason": None},
+    # CUST-0008 — Team, paid; includes a downgrade prorated invoice from TICK-0011
+    {"invoice_id": "INV-0014", "customer_id": "CUST-0008", "subscription_id": "SUB-0008", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-11", "due_date": "2026-08-11", "paid_at": "2026-08-11", "failure_reason": None},
+    {"invoice_id": "INV-0015", "customer_id": "CUST-0008", "subscription_id": "SUB-0008", "amount": "65.40", "currency": "USD", "status": "paid", "invoice_date": "2026-07-10", "due_date": "2026-07-10", "paid_at": "2026-07-16", "failure_reason": None},
+    # CUST-0009 — Business, paid
+    {"invoice_id": "INV-0016", "customer_id": "CUST-0009", "subscription_id": "SUB-0009", "amount": "299.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-01", "due_date": "2026-08-01", "paid_at": "2026-08-01", "failure_reason": None},
+    {"invoice_id": "INV-0017", "customer_id": "CUST-0009", "subscription_id": "SUB-0009", "amount": "299.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-01", "due_date": "2026-07-01", "paid_at": "2026-07-01", "failure_reason": None},
+    # CUST-0011 — Team, paid
+    {"invoice_id": "INV-0018", "customer_id": "CUST-0011", "subscription_id": "SUB-0011", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-19", "due_date": "2026-08-19", "paid_at": "2026-08-19", "failure_reason": None},
+    # CUST-0012 — Business, past_due: one failed invoice
+    {"invoice_id": "INV-0019", "customer_id": "CUST-0012", "subscription_id": "SUB-0012", "amount": "299.00", "currency": "USD", "status": "failed", "invoice_date": "2026-08-14", "due_date": "2026-08-14", "paid_at": None, "failure_reason": "Card declined: card expired"},
+    {"invoice_id": "INV-0020", "customer_id": "CUST-0012", "subscription_id": "SUB-0012", "amount": "299.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-14", "due_date": "2026-07-14", "paid_at": "2026-07-14", "failure_reason": None},
+    # CUST-0013 — Starter, paid
+    {"invoice_id": "INV-0021", "customer_id": "CUST-0013", "subscription_id": "SUB-0013", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-14", "due_date": "2026-08-14", "paid_at": "2026-08-14", "failure_reason": None},
+    # CUST-0014 — Team, paid
+    {"invoice_id": "INV-0022", "customer_id": "CUST-0014", "subscription_id": "SUB-0014", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-02", "due_date": "2026-08-02", "paid_at": "2026-08-02", "failure_reason": None},
+    # CUST-0015 — Business, discount active (15% retention), paid
+    {"invoice_id": "INV-0023", "customer_id": "CUST-0015", "subscription_id": "SUB-0015", "amount": "254.15", "currency": "USD", "status": "paid", "invoice_date": "2026-08-30", "due_date": "2026-08-30", "paid_at": "2026-08-30", "failure_reason": None},
+    {"invoice_id": "INV-0024", "customer_id": "CUST-0015", "subscription_id": "SUB-0015", "amount": "299.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-30", "due_date": "2026-07-30", "paid_at": "2026-07-30", "failure_reason": None},
+    # CUST-0016 — Starter, 3 failed payments (past_due)
+    {"invoice_id": "INV-0025", "customer_id": "CUST-0016", "subscription_id": "SUB-0016", "amount": "29.00", "currency": "USD", "status": "failed", "invoice_date": "2026-08-18", "due_date": "2026-08-18", "paid_at": None, "failure_reason": "Card declined: insufficient funds"},
+    {"invoice_id": "INV-0026", "customer_id": "CUST-0016", "subscription_id": "SUB-0016", "amount": "29.00", "currency": "USD", "status": "failed", "invoice_date": "2026-07-25", "due_date": "2026-07-25", "paid_at": None, "failure_reason": "Card declined: do not honor"},
+    {"invoice_id": "INV-0027", "customer_id": "CUST-0016", "subscription_id": "SUB-0016", "amount": "29.00", "currency": "USD", "status": "failed", "invoice_date": "2026-07-10", "due_date": "2026-07-10", "paid_at": None, "failure_reason": "Card declined: insufficient funds"},
+    # CUST-0017 — Team, paid
+    {"invoice_id": "INV-0028", "customer_id": "CUST-0017", "subscription_id": "SUB-0017", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-10", "due_date": "2026-08-10", "paid_at": "2026-08-10", "failure_reason": None},
+    # CUST-0018 — Starter, cancelled (void after cancellation)
+    {"invoice_id": "INV-0029", "customer_id": "CUST-0018", "subscription_id": "SUB-0018", "amount": "29.00", "currency": "USD", "status": "void", "invoice_date": "2026-06-01", "due_date": "2026-06-01", "paid_at": None, "failure_reason": "Subscription cancelled; invoice voided"},
+    # CUST-0019 — Team, paid
+    {"invoice_id": "INV-0030", "customer_id": "CUST-0019", "subscription_id": "SUB-0019", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-05", "due_date": "2026-08-05", "paid_at": "2026-08-05", "failure_reason": None},
+    # CUST-0021 — Team, paid
+    {"invoice_id": "INV-0031", "customer_id": "CUST-0021", "subscription_id": "SUB-0021", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-12", "due_date": "2026-08-12", "paid_at": "2026-08-12", "failure_reason": None},
+    # CUST-0022 — Starter, paid
+    {"invoice_id": "INV-0032", "customer_id": "CUST-0022", "subscription_id": "SUB-0022", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-01", "due_date": "2026-08-01", "paid_at": "2026-08-01", "failure_reason": None},
+    # CUST-0023 — Team, past_due: one failed invoice, one paid
+    {"invoice_id": "INV-0033", "customer_id": "CUST-0023", "subscription_id": "SUB-0023", "amount": "99.00", "currency": "USD", "status": "failed", "invoice_date": "2026-08-20", "due_date": "2026-08-20", "paid_at": None, "failure_reason": "Card declined: card expired"},
+    {"invoice_id": "INV-0034", "customer_id": "CUST-0023", "subscription_id": "SUB-0023", "amount": "99.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-20", "due_date": "2026-07-20", "paid_at": "2026-07-20", "failure_reason": None},
+    # CUST-0024 — Starter, paid
+    {"invoice_id": "INV-0035", "customer_id": "CUST-0024", "subscription_id": "SUB-0024", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-08-15", "due_date": "2026-08-15", "paid_at": "2026-08-15", "failure_reason": None},
+    # CUST-0025 — Starter, cancelled; last invoice paid before cancel
+    {"invoice_id": "INV-0036", "customer_id": "CUST-0025", "subscription_id": "SUB-0025", "amount": "29.00", "currency": "USD", "status": "paid", "invoice_date": "2026-07-05", "due_date": "2026-07-05", "paid_at": "2026-07-05", "failure_reason": None},
+]
+
+# ---------------------------------------------------------------------------
+# Refunds  (matching resolved/escalated refund tickets in TICKETS above)
+# Fields: refund_id, customer_id, ticket_id, amount, currency, reason,
+#         status (approved | pending_review | rejected), created_at, processed_at, notes
+# $100 threshold: >=100 -> pending_review (server-enforced); <$100 -> approved
+# ---------------------------------------------------------------------------
+
+REFUNDS = [
+    # TICK-0037 — CUST-0018 bad onboarding, $29 full refund, auto-approved
+    {"refund_id": "REF-0001", "customer_id": "CUST-0018", "ticket_id": "TICK-0037", "amount": "29.00", "currency": "USD", "reason": "Full refund for billing cycle where customer received no value due to onboarding failure.", "status": "approved", "created_at": "2026-05-28", "processed_at": "2026-05-29", "notes": "Subscription cancelled same day."},
+    # TICK-0038 — CUST-0025 bad onboarding, $29 refund, auto-approved
+    {"refund_id": "REF-0002", "customer_id": "CUST-0025", "ticket_id": "TICK-0038", "amount": "29.00", "currency": "USD", "reason": "Refund for billing cycle; customer unable to use product due to Slack integration issues.", "status": "approved", "created_at": "2026-07-05", "processed_at": "2026-07-06", "notes": None},
+    # TICK-0039 — CUST-0022 partial goodwill credit (applied as account_balance)
+    {"refund_id": "REF-0003", "customer_id": "CUST-0022", "ticket_id": "TICK-0039", "amount": "14.50", "currency": "USD", "reason": "Partial goodwill credit for first week where monitors were not reporting correctly.", "status": "approved", "created_at": "2026-06-10", "processed_at": "2026-06-11", "notes": "Applied as account balance credit, not card refund."},
+    # TICK-0043 — CUST-0006 prorated refund after Business->Team downgrade
+    {"refund_id": "REF-0004", "customer_id": "CUST-0006", "ticket_id": "TICK-0043", "amount": "86.30", "currency": "USD", "reason": "Prorated credit for unused Business days after downgrade to Team mid-cycle.", "status": "approved", "created_at": "2026-08-11", "processed_at": "2026-08-12", "notes": "Applied as account balance credit for next invoice."},
+    # TICK-0045 — CUST-0012 cancellation + refund; EXCEEDS $100 -> pending_review
+    {"refund_id": "REF-0005", "customer_id": "CUST-0012", "ticket_id": "TICK-0045", "amount": "149.50", "currency": "USD", "reason": "Partial refund requested on cancellation of Business plan while account is past due.", "status": "pending_review", "created_at": "2026-08-16", "processed_at": None, "notes": "Escalated: amount exceeds $100 auto-approval threshold; account also has outstanding failed payment."},
+    # TICK-0046 — CUST-0016 cancellation prorated refund, under $100, approved but pending cancel confirm
+    {"refund_id": "REF-0006", "customer_id": "CUST-0016", "ticket_id": "TICK-0046", "amount": "19.33", "currency": "USD", "reason": "Prorated refund for unused Starter days after cancellation due to repeated payment failures.", "status": "approved", "created_at": "2026-08-20", "processed_at": None, "notes": "Pending cancellation confirmation before processing."},
+    # TICK-0042 — CUST-0007 charged-after-trial dispute; needs investigation -> pending_review
+    {"refund_id": "REF-0007", "customer_id": "CUST-0007", "ticket_id": "TICK-0042", "amount": "29.00", "currency": "USD", "reason": "Customer claims trial was cancelled before charge; refund pending confirmation of cancellation log.", "status": "pending_review", "created_at": "2026-08-05", "processed_at": None, "notes": "Escalated to confirm whether trial cancellation was recorded before charge was processed."},
+]
+
+# ---------------------------------------------------------------------------
+# Downtime events  (backs the get_historical_stats / GET /monitors/{customer_id}/stats tool)
+# Fields: event_id, customer_id, endpoint_name, started_at, resolved_at,
+#         duration_minutes, cause, related_incident_id
+# ---------------------------------------------------------------------------
+
+DOWNTIME_EVENTS = [
+    # CUST-0001 — false-positive from INC-004 DNS flapping (TICK-0017)
+    {"event_id": "DT-0001", "customer_id": "CUST-0001", "endpoint_name": "api.northwindanalytics.io", "started_at": "2026-08-09", "resolved_at": "2026-08-09", "duration_minutes": 3, "cause": "False positive — upstream DNS resolver flapping (INC-004)", "related_incident_id": "INC-004"},
+    # CUST-0001 — separate real brief outage unrelated to an incident
+    {"event_id": "DT-0002", "customer_id": "CUST-0001", "endpoint_name": "dashboard.northwindanalytics.io", "started_at": "2026-07-22", "resolved_at": "2026-07-22", "duration_minutes": 12, "cause": "Customer-side server restart during a deployment", "related_incident_id": None},
+    # CUST-0002 — multiple false-positive alerts (TICK-0021), pattern under investigation
+    {"event_id": "DT-0003", "customer_id": "CUST-0002", "endpoint_name": "api.vertexcloud.io", "started_at": "2026-08-13", "resolved_at": "2026-08-13", "duration_minutes": 1, "cause": "Unexplained brief check failure — possible new flakiness (TICK-0021)", "related_incident_id": None},
+    {"event_id": "DT-0004", "customer_id": "CUST-0002", "endpoint_name": "api.vertexcloud.io", "started_at": "2026-08-15", "resolved_at": "2026-08-15", "duration_minutes": 2, "cause": "Unexplained brief check failure — possible new flakiness (TICK-0021)", "related_incident_id": None},
+    {"event_id": "DT-0005", "customer_id": "CUST-0002", "endpoint_name": "api.vertexcloud.io", "started_at": "2026-08-17", "resolved_at": "2026-08-17", "duration_minutes": 1, "cause": "Unexplained brief check failure — pattern escalated (TICK-0021)", "related_incident_id": None},
+    # CUST-0003 — SSL false failure during INC-001 window (TICK-0031)
+    {"event_id": "DT-0006", "customer_id": "CUST-0003", "endpoint_name": "api.bramblewood.dev (SSL check)", "started_at": "2026-08-06", "resolved_at": "2026-08-07", "duration_minutes": 1440, "cause": "False SSL failure — stale intermediate cert bundle (INC-001)", "related_incident_id": "INC-001"},
+    # CUST-0006 — real downtime unrelated to tickets
+    {"event_id": "DT-0007", "customer_id": "CUST-0006", "endpoint_name": "app.crestpoint.io", "started_at": "2026-06-14", "resolved_at": "2026-06-14", "duration_minutes": 28, "cause": "Customer-side infrastructure maintenance window", "related_incident_id": None},
+    # CUST-0007 — false-positive from INC-004 (TICK-0018)
+    {"event_id": "DT-0008", "customer_id": "CUST-0007", "endpoint_name": "api.emberco.dev", "started_at": "2026-08-10", "resolved_at": "2026-08-10", "duration_minutes": 4, "cause": "False positive — upstream DNS resolver flapping (INC-004)", "related_incident_id": "INC-004"},
+    # CUST-0008 — intermittent SSL check (TICK-0033, still open)
+    {"event_id": "DT-0009", "customer_id": "CUST-0008", "endpoint_name": "api.cascadiadevops.com (SSL check)", "started_at": "2026-08-21", "resolved_at": "2026-08-21", "duration_minutes": 5, "cause": "Intermittent SSL check failure — root cause under investigation (TICK-0033)", "related_incident_id": None},
+    {"event_id": "DT-0010", "customer_id": "CUST-0008", "endpoint_name": "api.cascadiadevops.com (SSL check)", "started_at": "2026-08-23", "resolved_at": "2026-08-23", "duration_minutes": 7, "cause": "Intermittent SSL check failure — root cause under investigation (TICK-0033)", "related_incident_id": None},
+    # CUST-0009 — brief degradation during API migration (TICK-0035)
+    {"event_id": "DT-0011", "customer_id": "CUST-0009", "endpoint_name": "api.ironleaf.io", "started_at": "2026-08-15", "resolved_at": "2026-08-15", "duration_minutes": 9, "cause": "Brief degradation during bulk monitor migration via API", "related_incident_id": None},
+    # CUST-0011 — real outage during INC-002 Slack delivery gap (TICK-0023)
+    {"event_id": "DT-0012", "customer_id": "CUST-0011", "endpoint_name": "api.nimbusstack.dev", "started_at": "2026-08-08", "resolved_at": "2026-08-08", "duration_minutes": 6, "cause": "Real brief outage during which Slack alert was delayed 20+ min (INC-002)", "related_incident_id": "INC-002"},
+    # CUST-0013 — false-positive from INC-004 (TICK-0019)
+    {"event_id": "DT-0013", "customer_id": "CUST-0013", "endpoint_name": "status.driftwoodanalytics.com", "started_at": "2026-08-11", "resolved_at": "2026-08-11", "duration_minutes": 2, "cause": "False positive — upstream DNS resolver flapping (INC-004)", "related_incident_id": "INC-004"},
+    # CUST-0015 — SSL false failure during INC-001 (TICK-0032)
+    {"event_id": "DT-0014", "customer_id": "CUST-0015", "endpoint_name": "api.anchorpoint.io (SSL check)", "started_at": "2026-08-09", "resolved_at": "2026-08-09", "duration_minutes": 480, "cause": "False SSL expiry warning — stale cert bundle (INC-001)", "related_incident_id": "INC-001"},
+    # CUST-0017 — real brief outage during which webhook never fired (TICK-0024)
+    {"event_id": "DT-0015", "customer_id": "CUST-0017", "endpoint_name": "webhook.fenwickdigital.io", "started_at": "2026-08-12", "resolved_at": "2026-08-12", "duration_minutes": 14, "cause": "Real brief outage during which configured webhook never fired (TICK-0024)", "related_incident_id": None},
+    # CUST-0019 — real outage with duplicate PagerDuty pages per INC-007 (TICK-0026)
+    {"event_id": "DT-0016", "customer_id": "CUST-0019", "endpoint_name": "api.hollowbrooktech.com", "started_at": "2026-08-20", "resolved_at": "2026-08-20", "duration_minutes": 11, "cause": "Real outage; PagerDuty sent duplicate pages per INC-007", "related_incident_id": "INC-007"},
+    # CUST-0022 — trailing false-positive from INC-004 (TICK-0020)
+    {"event_id": "DT-0017", "customer_id": "CUST-0022", "endpoint_name": "api.kestrelsys.io", "started_at": "2026-08-12", "resolved_at": "2026-08-12", "duration_minutes": 1, "cause": "Trailing false-positive alert from INC-004 DNS window", "related_incident_id": "INC-004"},
+    # CUST-0024 — monitor stuck in pending (TICK-0029/INC-003); endpoint unchecked, ongoing
+    {"event_id": "DT-0018", "customer_id": "CUST-0024", "endpoint_name": "staging.meridiandevops.com", "started_at": "2026-08-22", "resolved_at": None, "duration_minutes": None, "cause": "Monitor stuck in 'pending' — endpoint unchecked (TICK-0029, INC-003); ongoing", "related_incident_id": "INC-003"},
+]
+
+# ---------------------------------------------------------------------------
+# PASTE THIS BLOCK near the bottom of your seed_data.py (the file main.py imports
+# from): after DOWNTIME_EVENTS is defined and ABOVE the `if __name__ == "__main__":`
+# block.
+#
+# Why: the seed data was written for "today = 2026-08-25" with hard-coded dates.
+# Time moves on, so billing dates drift into the past (negative days_remaining in
+# the proration math), TICK-0022 falls outside the 14-day dedup window, and the
+# downtime events fall outside the 30-day stats window. This shifts every ISO date
+# by (today - anchor), so all the relative relationships stay exactly as designed.
+# Non-date strings (IDs, prose) and None are left alone; string dates stay strings.
+# ---------------------------------------------------------------------------
+import re as _re
+from datetime import date as _date
+
+SEED_ANCHOR = _date(2026, 8, 25)  # the "today" this seed data was written for
+_ISO_DATE = _re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _shift_value(value, delta):
+    if isinstance(value, str) and _ISO_DATE.fullmatch(value):
+        return (_date.fromisoformat(value) + delta).isoformat()
+    if isinstance(value, _date):
+        return value + delta
+    return value
+
+
+def _shift_rows(rows, delta):
+    return [{key: _shift_value(val, delta) for key, val in row.items()} for row in rows]
+
+
+_DELTA = _date.today() - SEED_ANCHOR
+CUSTOMERS = _shift_rows(CUSTOMERS, _DELTA)
+SUBSCRIPTIONS = _shift_rows(SUBSCRIPTIONS, _DELTA)
+TICKETS = _shift_rows(TICKETS, _DELTA)
+KNOWN_INCIDENTS = _shift_rows(KNOWN_INCIDENTS, _DELTA)
+INVOICES = _shift_rows(INVOICES, _DELTA)
+REFUNDS = _shift_rows(REFUNDS, _DELTA)
+DOWNTIME_EVENTS = _shift_rows(DOWNTIME_EVENTS, _DELTA)
+
 if __name__ == "__main__":
-    print(f"Customers:       {len(CUSTOMERS)}")
-    print(f"Subscriptions:   {len(SUBSCRIPTIONS)}")
-    print(f"Tickets:         {len(TICKETS)}")
-    print(f"Known incidents: {len(KNOWN_INCIDENTS)}")
+    print(f"Customers:        {len(CUSTOMERS)}")
+    print(f"Subscriptions:    {len(SUBSCRIPTIONS)}")
+    print(f"Tickets:          {len(TICKETS)}")
+    print(f"Known incidents:  {len(KNOWN_INCIDENTS)}")
+    print(f"Invoices:         {len(INVOICES)}")
+    print(f"Refunds:          {len(REFUNDS)}")
+    print(f"Downtime events:  {len(DOWNTIME_EVENTS)}")
 
     from collections import Counter
     print("Tickets by category:", dict(Counter(t["category"] for t in TICKETS)))
     print("Tickets by status:  ", dict(Counter(t["status"] for t in TICKETS)))
     print("Customers by tier:  ", dict(Counter(c["tier"] for c in CUSTOMERS)))
     print("Customers by status:", dict(Counter(c["account_status"] for c in CUSTOMERS)))
+    print("Invoices by status: ", dict(Counter(i["status"] for i in INVOICES)))
+    print("Refunds by status:  ", dict(Counter(r["status"] for r in REFUNDS)))
