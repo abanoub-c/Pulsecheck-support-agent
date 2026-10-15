@@ -7,7 +7,7 @@ These are the thin wrappers around the FastAPI backend.
 LangChain's @tool decorator automatically extracts the docstrings and 
 type hints to tell the LLM exactly how and when to use these functions.
 """
-
+import os
 import requests
 from typing import Optional, Literal
 from langchain_core.tools import tool
@@ -15,8 +15,7 @@ import httpx
 
 
 # The base URL where your FastAPI mock CRM is running
-API_BASE = "http://127.0.0.1:8000"
-
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
 # ===========================================================================
 # BILLING AGENT TOOLS
 # ===========================================================================

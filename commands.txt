@@ -4,6 +4,8 @@ uvicorn main:app --reload
 or
 uvicorn main:app --reload --port 8000
 
+the othwer serveice is
+uvicorn service:app --reload --port 8001
 
 // Resed Data seed
 Invoke-RestMethod -Method Post http://localhost:8000/admin/reseed

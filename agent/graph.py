@@ -146,7 +146,9 @@ def escalate_node(state: SupportState) -> dict:
                         # EscalationCreate.confidence allows at most 3 decimal places.
                         "confidence": round(confidence, 3) if confidence is not None else None,
                         "reasoning": payload["reasoning"],
-                        "proposed_action": payload["proposed_action"],
+                        # thread_id rides along inside proposed_action so the link between this CRM row and
+                        # the paused conversation survives restarts (the agent service strips it before display).
+                        "proposed_action": {**(payload["proposed_action"] or {}), "thread_id": state.get("thread_id")},
                         "conversation_summary": summary,
                     },
                     timeout=10,
@@ -155,6 +157,7 @@ def escalate_node(state: SupportState) -> dict:
             except requests.RequestException:
                 escalation_id = None
 
+    payload["escalation_id"] = escalation_id  # lets the agent service link this thread to its CRM row
     decision = interrupt(payload)
 
     last = state["messages"][-1] if state["messages"] else None

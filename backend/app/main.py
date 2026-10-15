@@ -913,6 +913,101 @@ def list_escalations(
     return list(db.scalars(statement))
 
 
+
+# ---------------------------------------------------------------------------
+# CRM ADDITIONS for backend/app/main.py
+#
+# Two tiny edits elsewhere in main.py first:
+#   1. top of file:   from typing import Any , Optional
+#      becomes:       from typing import Any, Literal, Optional
+#   2. in list_escalations(), change
+#          if status_filter is not None:
+#      to
+#          if status_filter is not None and status_filter != "all":
+#
+# Then paste everything below into main.py, ABOVE the `if __name__ == "__main__":` block
+# (it uses get_db, ORMModel, RefundRead, EscalationRead, Customer, Refund, Escalation,
+#  select, Session, Depends, Query, HTTPException, Field, BaseModel, date, which main.py
+#  already defines or imports).
+# ---------------------------------------------------------------------------
+
+
+# ---- customers: list (feeds the demo account switcher and the dashboard) ----
+class CustomerListItem(ORMModel):
+    customer_id: str
+    company_name: str
+    tier: str
+    account_status: str
+
+
+@app.get("/customers", response_model=list[CustomerListItem], tags=["customers"])
+def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
+    return list(db.scalars(select(Customer).order_by(Customer.customer_id)))
+
+
+# ---- refunds: list + human decision ----
+@app.get("/refunds", response_model=list[RefundRead], tags=["refunds"])
+def list_refunds(
+    status_filter: str | None = Query(default=None, alias="status"),
+    customer_id: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> list[Refund]:
+    statement = select(Refund).order_by(Refund.created_at.desc())
+    if status_filter is not None:
+        statement = statement.where(Refund.status == status_filter)
+    if customer_id is not None:
+        statement = statement.where(Refund.customer_id == customer_id)
+    return list(db.scalars(statement))
+
+
+class RefundDecision(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+@app.patch("/refunds/{refund_id}", response_model=RefundRead, tags=["refunds"])
+def decide_refund(refund_id: str, payload: RefundDecision, db: Session = Depends(get_db)) -> Refund:
+    refund = db.get(Refund, refund_id)
+    if refund is None:
+        raise HTTPException(status_code=404, detail=f"Refund {refund_id} not found")
+    if refund.status != "pending_review":
+        raise HTTPException(status_code=409, detail=f"Refund {refund_id} is already {refund.status}.")
+
+    refund.status = "approved" if payload.action == "approve" else "rejected"
+    refund.processed_at = date.today()
+    verb = "Approved" if payload.action == "approve" else "Rejected"
+    refund.notes = f"{verb} by a human reviewer." + (f" Note: {payload.note}" if payload.note else "")
+    db.commit()
+    db.refresh(refund)
+    return refund
+
+
+# ---- escalations: record the human's decision ----
+class EscalationDecision(BaseModel):
+    decision: Literal["approve", "edit", "reject"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+@app.patch("/escalations/{escalation_id}/decision", response_model=EscalationRead, tags=["escalations"])
+def decide_escalation(
+    escalation_id: str, payload: EscalationDecision, db: Session = Depends(get_db)
+) -> Escalation:
+    escalation = db.get(Escalation, escalation_id)
+    if escalation is None:
+        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
+    if escalation.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Escalation {escalation_id} is already {escalation.status}.")
+
+    escalation.status = "resolved"
+    escalation.decision = payload.decision
+    escalation.decision_note = payload.note
+    escalation.resolved_at = date.today()
+    db.commit()
+    db.refresh(escalation)
+    return escalation
+
+
+
 if __name__ == "__main__":
     import uvicorn
 
