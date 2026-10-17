@@ -25,7 +25,7 @@ Environment:
                             locally set it to your uvicorn port, e.g. http://127.0.0.1:8001/crm)
     INTERNAL_API_KEY        shared secret; the Node server sends it as X-Internal-Key. REQUIRED when deployed.
     ALLOWED_ORIGINS         CORS origins (default http://localhost:3000)
-    DEMO_CUSTOMER_IDS       allow-list of customer ids the chat accepts
+    DEMO_CUSTOMER_IDS       optional comma-separated restriction; when unset, CRM customers can chat
     MAX_MESSAGE_CHARS       default 500
 """
 
@@ -57,7 +57,7 @@ sys.path.insert(0, os.path.join(ROOT, "backend", "app"))
 
 PORT = os.getenv("PORT", "8000")
 CRM_API_URL = os.getenv("CRM_API_URL", f"http://127.0.0.1:{PORT}/crm").rstrip("/")
-os.environ.setdefault("API_BASE", CRM_API_URL)  # agent/graph.py and agent/tools.py read API_BASE at import time
+os.environ["API_BASE"] = CRM_API_URL  # the combined service always routes agent tools through its mounted CRM
 
 import requests  # noqa: E402
 from fastapi import Depends, FastAPI, Header, HTTPException, Query  # noqa: E402
@@ -67,10 +67,18 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa
 from langgraph.checkpoint.memory import MemorySaver  # noqa: E402
 from langgraph.types import Command  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 
 from agent.graph import builder  # noqa: E402
 from agent.state import new_support_state  # noqa: E402
-from backend.app.main import app as crm_app, seed_database  # noqa: E402
+from backend.app.main import (  # noqa: E402
+    Conversation,
+    ConversationMessage,
+    Customer,
+    SessionLocal,
+    app as crm_app,
+    seed_database,
+)
 
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
@@ -79,10 +87,7 @@ MAX_THREADS = int(os.getenv("MAX_THREADS", "500"))
 KEEPALIVE_SECONDS = 10
 DEMO_CUSTOMER_IDS = {
     c.strip()
-    for c in os.getenv(
-        "DEMO_CUSTOMER_IDS",
-        "CUST-0006,CUST-0002,CUST-0022,CUST-0012,CUST-0005,CUST-0014,CUST-0019,CUST-0010",
-    ).split(",")
+    for c in os.getenv("DEMO_CUSTOMER_IDS", "").split(",")
     if c.strip()
 }
 THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -101,11 +106,15 @@ DEFAULT_REJECT = ("A specialist reviewed your request and could not approve it. 
 # Checkpointer + lifespan
 # ---------------------------------------------------------------------------
 def _checkpointer_url(url: str) -> str:
-    return url.replace("postgresql+psycopg2://", "postgresql://").replace("postgres://", "postgresql://")
+    return (
+        url.replace("postgresql+psycopg2://", "postgresql://")
+        .replace("postgresql+psycopg://", "postgresql://")
+        .replace("postgres://", "postgresql://")
+    )
 
 
 def _connect_checkpointer():
-    """Postgres (Neon) when PULSECHECK_DATABASE_URL is a postgres URL, otherwise in-memory."""
+    """Use durable Neon/Postgres checkpoints in production, memory for local SQLite runs."""
     url = os.getenv("PULSECHECK_DATABASE_URL", "")
     if not url.startswith(("postgresql", "postgres")):
         return None, MemorySaver()
@@ -172,6 +181,24 @@ def require_key(x_internal_key: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing X-Internal-Key")
 
 
+def chat_customer_exists(customer_id: str) -> bool:
+    if DEMO_CUSTOMER_IDS:
+        return customer_id in DEMO_CUSTOMER_IDS
+    try:
+        response = requests.get(
+            f"{CRM_API_URL}/customers/{requests.utils.quote(customer_id, safe='')}",
+            headers={"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {},
+            timeout=5,
+        )
+    except requests.RequestException as error:
+        raise HTTPException(status_code=503, detail="The CRM customer service is unavailable.") from error
+    if response.status_code == 404:
+        return False
+    if not response.ok:
+        raise HTTPException(status_code=503, detail="The CRM customer service could not validate this customer.")
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Per-process logs (messages/steps for the UI). The conversation itself lives in the checkpointer.
 # ---------------------------------------------------------------------------
@@ -181,13 +208,25 @@ class Runtime:
         self.threads: dict[str, dict[str, Any]] = {}
         self.escalation_threads: dict[str, str] = {}  # fallback only; the CRM row also stores thread_id
         self.busy: set[str] = set()
+        self.resetting = False
 
     def claim(self, thread_id: str) -> bool:
         with self.lock:
-            if thread_id in self.busy:
+            if self.resetting or thread_id in self.busy:
                 return False
             self.busy.add(thread_id)
             return True
+
+    def begin_reset(self) -> bool:
+        with self.lock:
+            if self.resetting or self.busy:
+                return False
+            self.resetting = True
+            return True
+
+    def end_reset(self) -> None:
+        with self.lock:
+            self.resetting = False
 
     def release(self, thread_id: str) -> None:
         with self.lock:
@@ -225,6 +264,10 @@ def _message(content: str, by: str = "agent") -> tuple[str, dict]:
 
 def crm(method: str, path: str, **kwargs: Any) -> requests.Response:
     try:
+        headers = dict(kwargs.pop("headers", {}) or {})
+        if INTERNAL_API_KEY:
+            headers.setdefault("X-Internal-Key", INTERNAL_API_KEY)
+        kwargs["headers"] = headers
         return requests.request(method, f"{CRM_API_URL}{path}", timeout=10, **kwargs)
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"CRM unreachable: {e}") from e
@@ -236,26 +279,152 @@ def _snapshot(thread_id: str):
     return snap, interrupts
 
 
+def _as_utc_datetime(value: Any = None) -> datetime:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    if isinstance(value, str):
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+    return datetime.now(timezone.utc)
+
+
+def _json_value(value: Any) -> Any:
+    return json.loads(json.dumps(value, default=str))
+
+
+def _saved_thread(thread_id: str) -> Optional[dict]:
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, thread_id)
+        if conversation is None:
+            return None
+        rows = db.scalars(
+            select(ConversationMessage)
+            .where(ConversationMessage.thread_id == thread_id)
+            .order_by(ConversationMessage.created_at, ConversationMessage.id)
+        ).all()
+        return {
+            "thread_id": conversation.thread_id,
+            "customer_id": conversation.customer_id,
+            "title": conversation.title,
+            "status": conversation.status,
+            "escalation_id": conversation.escalation_id,
+            "state": conversation.agent_state or {},
+            "steps": conversation.trace_steps or [],
+            "created_at": conversation.created_at,
+            "updated_at": conversation.updated_at,
+            "messages": [
+                {"id": row.id, "role": row.role, "content": row.content,
+                 "at": row.created_at.isoformat(), "trace": row.trace}
+                for row in rows
+            ],
+        }
+
+
+def _save_conversation_message(th: dict, message: dict) -> None:
+    now = datetime.now(timezone.utc)
+    at = _as_utc_datetime(message.get("at"))
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, th["thread_id"])
+        if conversation is None:
+            title = message["content"].strip().replace("\n", " ")[:237].strip()
+            if len(message["content"].strip()) > 240:
+                title = f"{title}…"
+            conversation = Conversation(
+                thread_id=th["thread_id"], customer_id=th["customer_id"],
+                title=title or "Support conversation", status=th.get("status", "open"),
+                created_at=at, updated_at=now,
+            )
+            db.add(conversation)
+            db.flush()
+        elif conversation.customer_id != th["customer_id"]:
+            raise ValueError("This conversation belongs to a different customer.")
+        if db.get(ConversationMessage, message["id"]) is None:
+            db.add(ConversationMessage(
+                id=message["id"], thread_id=th["thread_id"], role=message["role"],
+                content=message["content"], trace=_json_value(message["trace"]) if message.get("trace") else None,
+                created_at=at,
+            ))
+        conversation.updated_at = now
+        conversation.status = th.get("status", conversation.status)
+        if th.get("escalation_id"):
+            conversation.escalation_id = th["escalation_id"]
+        if th.get("state"):
+            conversation.agent_state = _json_value(th["state"])
+        db.commit()
+        th["updated_at"] = now.isoformat()
+
+
+def _save_conversation_step(th: dict, step: dict) -> None:
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, th["thread_id"])
+        if conversation is None:
+            return
+        steps = list(conversation.trace_steps or [])
+        if not any(existing.get("id") == step["id"] for existing in steps):
+            steps.append(_json_value(step))
+            conversation.trace_steps = steps
+            db.commit()
+
+
+def _save_conversation_state(th: dict, state: dict, status: str, escalation_id: Optional[str] = None) -> None:
+    now = datetime.now(timezone.utc)
+    th["state"] = _json_value(state)
+    th["status"] = status
+    if escalation_id:
+        th["escalation_id"] = escalation_id
+    with SessionLocal() as db:
+        conversation = db.get(Conversation, th["thread_id"])
+        if conversation is None:
+            return
+        conversation.status = status
+        conversation.agent_state = _json_value(state)
+        conversation.updated_at = now
+        if escalation_id:
+            conversation.escalation_id = escalation_id
+        db.commit()
+        th["updated_at"] = now.isoformat()
+
+
 def _load_thread(thread_id: str, customer_id: Optional[str] = None) -> Optional[dict]:
-    """Return the thread log. After a restart the checkpoint may still exist (Postgres), so rebuild the
-    visible messages from it. With customer_id given, create a fresh log when nothing exists yet."""
+    """Load the searchable transcript and resumable LangGraph checkpoint for one thread."""
     th = RT.threads.get(thread_id)
     if th is not None:
         return th
     values = dict(G().get_state({"configurable": {"thread_id": thread_id}}).values or {})
+    saved = _saved_thread(thread_id)
     if values:
-        msgs = []
-        for m in values.get("messages", []):
-            text = _text(getattr(m, "content", "")).strip()
-            if isinstance(m, HumanMessage) and text:
-                msgs.append({"role": "user", "content": text, "at": None, "by": "customer"})
-            elif isinstance(m, AIMessage) and text and not m.tool_calls:
-                msgs.append({"role": "assistant", "content": text, "at": None, "by": "agent"})
-        th = {"customer_id": values.get("customer_id"), "created_at": time.time(), "started": True,
-              "messages": msgs, "steps": [], "escalation_id": values.get("escalation_id")}
+        msgs = saved["messages"] if saved else []
+        if not saved:
+            for m in values.get("messages", []):
+                text = _text(getattr(m, "content", "")).strip()
+                if isinstance(m, HumanMessage) and text:
+                    msgs.append({"id": uuid.uuid4().hex, "role": "user", "content": text,
+                                 "at": _now(), "by": "customer"})
+                elif isinstance(m, AIMessage) and text and not m.tool_calls:
+                    msgs.append({"id": uuid.uuid4().hex, "role": "assistant", "content": text,
+                                 "at": _now(), "by": "agent"})
+        th = {"thread_id": thread_id, "customer_id": values.get("customer_id") or (saved or {}).get("customer_id"),
+              "created_at": time.time(), "updated_at": (saved or {}).get("updated_at", _now()),
+              "started": True, "messages": msgs,
+              "steps": saved["steps"] if saved else [step for msg in msgs for step in (msg.get("trace") or {}).get("steps", [])],
+              "pending_steps": [], "escalation_id": values.get("escalation_id") or (saved or {}).get("escalation_id"),
+              "state": saved.get("state", {}) if saved else {},
+              "status": saved.get("status", values.get("resolution_status", "open")) if saved else values.get("resolution_status", "open")}
+        if not saved:
+            for message in msgs:
+                _save_conversation_message(th, message)
+    elif saved:
+        th = {"thread_id": thread_id, "customer_id": saved["customer_id"], "created_at": time.time(),
+              "updated_at": saved["updated_at"],
+              "started": False, "messages": saved["messages"],
+              "steps": saved["steps"],
+              "pending_steps": [], "escalation_id": saved["escalation_id"], "state": saved["state"],
+              "status": saved["status"]}
     elif customer_id is not None:
-        th = {"customer_id": customer_id, "created_at": time.time(), "started": False,
-              "messages": [], "steps": [], "escalation_id": None}
+        th = {"thread_id": thread_id, "customer_id": customer_id, "created_at": time.time(),
+              "updated_at": _now(),
+              "started": False, "messages": [], "steps": [], "pending_steps": [],
+              "escalation_id": None, "state": {}, "status": "open"}
     else:
         return None
     with RT.lock:
@@ -351,8 +520,34 @@ def events_for(node: str, update: dict) -> list[tuple[str, dict]]:
 def _record(th: dict, event: str, data: dict) -> None:
     if event == "step":
         th["steps"].append(data)
+        th.setdefault("pending_steps", []).append(data)
+        _save_conversation_step(th, data)
     elif event == "message":
-        th["messages"].append({"role": data["role"], "content": data["content"], "at": data["at"], "by": data["by"]})
+        by = data.get("by", "agent")
+        at = data.get("at") or _now()
+        message = {
+            "id": str(data.get("id") or uuid.uuid4().hex),
+            "role": "human" if by == "human" else "user" if by == "customer" else data["role"],
+            "content": data["content"],
+            "at": at,
+            "by": by,
+        }
+        if any(existing.get("id") == message["id"] for existing in th["messages"]):
+            return
+        if by != "customer":
+            message["trace"] = {
+                "steps": th.pop("pending_steps", []),
+                "toolCalls": [],
+                "state": th.get("state") or {
+                    "category": None, "pending_categories": [], "confidence": None,
+                    "clarify_attempts": 0, "turn_count": 0, "resolution_status": "open",
+                    "escalation_reason": None,
+                },
+                "startedAt": at,
+                "finishedAt": at,
+            }
+        th["messages"].append(message)
+        _save_conversation_message(th, message)
 
 
 def _state_view(values: dict, interrupts: list) -> dict:
@@ -365,7 +560,7 @@ def _state_view(values: dict, interrupts: list) -> dict:
 
 def _latest_pending_escalation(customer_id: str) -> Optional[str]:
     try:
-        r = requests.get(f"{CRM_API_URL}/escalations", params={"status": "pending", "customer_id": customer_id}, timeout=10)
+        r = requests.get(f"{CRM_API_URL}/escalations", params={"status": "pending", "customer_id": customer_id}, headers={"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}, timeout=10)
         rows = r.json() if r.ok else []
         return rows[0]["escalation_id"] if rows else None
     except (requests.RequestException, ValueError, KeyError):
@@ -378,6 +573,7 @@ def _latest_pending_escalation(customer_id: str) -> Optional[str]:
 class ChatRequest(BaseModel):
     thread_id: str
     customer_id: str
+    message_id: Optional[str] = Field(default=None, min_length=8, max_length=64)
     message: str = Field(min_length=1)
 
 
@@ -397,27 +593,29 @@ def _error_event(e: Exception) -> tuple[str, dict]:
     return "error", {"message": "Something went wrong while the agent was working. Please try again.", "retryable": True}
 
 
-def chat_stream(thread_id: str, customer_id: str, text: str) -> Iterator[str]:
+def chat_stream(thread_id: str, customer_id: str, text: str, message_id: Optional[str] = None) -> Iterator[str]:
     th = _load_thread(thread_id, customer_id)
-    th["messages"].append({"role": "user", "content": text, "at": _now(), "by": "customer"})
-
-    # A thread that is paused for a human must not receive new input (it would orphan the pause).
-    if th["started"]:
-        snap, interrupts = _snapshot(thread_id)
-        if interrupts:
-            ev, data = _message(WAITING_NOTICE)
-            _record(th, ev, data)
-            yield sse(ev, data)
-            yield sse("state", _state_view(snap.values, interrupts))
-            yield sse("done", {})
-            return
-
     if not RT.claim(thread_id):
-        yield sse("error", {"message": "The agent is still working on your previous message.", "retryable": True})
+        yield sse("error", {"message": "The agent is busy or the demo is being reset. Please try again.", "retryable": True})
         yield sse("done", {})
         return
 
     try:
+        _record(th, "message", {"id": message_id, "role": "user", "content": text, "at": _now(), "by": "customer"})
+
+        # A thread that is paused for a human must not receive new input (it would orphan the pause).
+        if th["started"]:
+            snap, interrupts = _snapshot(thread_id)
+            if interrupts:
+                ev, data = _message(WAITING_NOTICE)
+                _record(th, ev, data)
+                state = _state_view(snap.values, interrupts)
+                _save_conversation_state(th, state, "escalated", th.get("escalation_id"))
+                yield sse(ev, data)
+                yield sse("state", state)
+                yield sse("done", {})
+                return
+
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 40}
         if th["started"]:
             input_: Any = {"messages": [HumanMessage(content=text)]}
@@ -462,7 +660,10 @@ def chat_stream(thread_id: str, customer_id: str, text: str) -> Iterator[str]:
             _record(th, ev, data)
             yield sse(ev, data)
             yield sse("escalated", {"escalation_id": esc_id, "reason": reason, "thread_id": thread_id})
-        yield sse("state", _state_view(values, interrupts))
+        state = _state_view(values, interrupts)
+        thread_status = "escalated" if interrupts else state.get("resolution_status") or "open"
+        _save_conversation_state(th, state, thread_status, th.get("escalation_id"))
+        yield sse("state", state)
         yield sse("done", {})
     finally:
         RT.release(thread_id)
@@ -473,7 +674,7 @@ def chat(body: ChatRequest, _: None = Depends(require_key)) -> StreamingResponse
     text = body.message.strip()
     if not THREAD_ID_RE.match(body.thread_id):
         raise HTTPException(status_code=422, detail="thread_id must be 8-64 characters: letters, digits, - or _")
-    if body.customer_id not in DEMO_CUSTOMER_IDS:
+    if not chat_customer_exists(body.customer_id):
         raise HTTPException(status_code=403, detail="Unknown demo customer")
     if not text or len(text) > MAX_MESSAGE_CHARS:
         raise HTTPException(status_code=422, detail=f"message must be 1-{MAX_MESSAGE_CHARS} characters")
@@ -481,7 +682,7 @@ def chat(body: ChatRequest, _: None = Depends(require_key)) -> StreamingResponse
     if existing and existing["customer_id"] and existing["customer_id"] != body.customer_id:
         raise HTTPException(status_code=409, detail="This thread belongs to a different customer")
     return StreamingResponse(
-        chat_stream(body.thread_id, body.customer_id, text),
+        chat_stream(body.thread_id, body.customer_id, text, body.message_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
@@ -493,7 +694,7 @@ def chat(body: ChatRequest, _: None = Depends(require_key)) -> StreamingResponse
 @app.get("/api/health")
 def health() -> dict:
     try:
-        crm_ok = requests.get(f"{CRM_API_URL}/health", timeout=2).ok
+        crm_ok = requests.get(f"{CRM_API_URL}/health", headers={"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}, timeout=2).ok
     except requests.RequestException:
         crm_ok = False
     return {"status": "ok", "agent": "ready", "crm": "ok" if crm_ok else "unreachable"}
@@ -501,6 +702,8 @@ def health() -> dict:
 
 @app.get("/api/threads/{thread_id}")
 def get_thread(thread_id: str, _: None = Depends(require_key)) -> dict:
+    if not THREAD_ID_RE.match(thread_id):
+        raise HTTPException(status_code=422, detail="Invalid thread_id")
     th = _load_thread(thread_id)
     if th is None:
         raise HTTPException(status_code=404, detail="Unknown thread")
@@ -509,10 +712,53 @@ def get_thread(thread_id: str, _: None = Depends(require_key)) -> dict:
     if th["started"]:
         snap, interrupts = _snapshot(thread_id)
         values = dict(snap.values)
-    status = "escalated" if interrupts else values.get("resolution_status", "open")
+    status = "escalated" if interrupts else values.get("resolution_status", th.get("status", "open"))
+    state = _state_view(values, interrupts) if values else th.get("state", _state_view(values, interrupts))
     return {"thread_id": thread_id, "customer_id": th["customer_id"], "status": status,
-            "messages": th["messages"], "steps": th["steps"], "state": _state_view(values, interrupts),
-            "escalation_id": th["escalation_id"]}
+            "messages": th["messages"], "steps": th["steps"], "state": state,
+            "escalation_id": th["escalation_id"], "updated_at": th.get("updated_at", _now())}
+
+
+@app.get("/api/customers/{customer_id}/conversations")
+def list_customer_conversations(
+    customer_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    _: None = Depends(require_key),
+) -> dict:
+    with SessionLocal() as db:
+        if db.get(Customer, customer_id) is None:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        message_count = (
+            select(func.count(ConversationMessage.id))
+            .where(ConversationMessage.thread_id == Conversation.thread_id)
+            .scalar_subquery()
+        )
+        last_message = (
+            select(ConversationMessage.content)
+            .where(ConversationMessage.thread_id == Conversation.thread_id)
+            .order_by(ConversationMessage.created_at.desc(), ConversationMessage.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        rows = db.execute(
+            select(Conversation, message_count, last_message)
+            .where(Conversation.customer_id == customer_id)
+            .order_by(Conversation.updated_at.desc(), Conversation.thread_id)
+            .limit(limit)
+        ).all()
+        items = []
+        for conversation, count, preview in rows:
+            items.append({
+                "thread_id": conversation.thread_id,
+                "customer_id": conversation.customer_id,
+                "title": conversation.title,
+                "status": conversation.status,
+                "message_count": int(count or 0),
+                "last_message_preview": (preview or "")[:180],
+                "created_at": conversation.created_at.isoformat(),
+                "updated_at": conversation.updated_at.isoformat(),
+            })
+        return {"items": items}
 
 
 _company_cache: dict[str, Any] = {"at": 0.0, "names": {}}
@@ -521,7 +767,7 @@ _company_cache: dict[str, Any] = {"at": 0.0, "names": {}}
 def _company_names() -> dict[str, str]:
     if time.time() - _company_cache["at"] > 60:
         try:
-            rows = requests.get(f"{CRM_API_URL}/customers", timeout=10).json()
+            rows = requests.get(f"{CRM_API_URL}/customers", headers={"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}, timeout=10).json()
             _company_cache["names"] = {r["customer_id"]: r["company_name"] for r in rows}
             _company_cache["at"] = time.time()
         except (requests.RequestException, ValueError, KeyError, TypeError):
@@ -597,6 +843,10 @@ def decide(escalation_id: str, body: DecisionBody, _: None = Depends(require_key
     if refund_id and body.action in ("approve", "reject"):
         rr = crm("PATCH", f"/refunds/{refund_id}", json={"action": body.action, "note": body.note})
         refund_updated = rr.ok
+    if th is not None:
+        state = dict(th.get("state") or {})
+        state.update({"resolution_status": "resolved", "escalation_reason": None})
+        _save_conversation_state(th, state, "resolved", escalation_id)
     return {"escalation_id": escalation_id, "decision": body.action, "resumed": resumed,
             "refund_updated": refund_updated}
 
@@ -605,7 +855,7 @@ def decide(escalation_id: str, body: DecisionBody, _: None = Depends(require_key
 def dashboard_summary(_: None = Depends(require_key)) -> dict:
     def count(path: str, params: dict) -> Optional[int]:
         try:
-            r = requests.get(f"{CRM_API_URL}{path}", params=params, timeout=10)
+            r = requests.get(f"{CRM_API_URL}{path}", params=params, headers={"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}, timeout=10)
             return len(r.json()) if r.ok else None
         except (requests.RequestException, ValueError):
             return None
@@ -617,21 +867,43 @@ def dashboard_summary(_: None = Depends(require_key)) -> dict:
 
 @app.post("/api/demo/reset")
 def demo_reset(_: None = Depends(require_key)) -> dict:
-    r = crm("POST", "/admin/reseed")
-    if r.status_code == 404:
-        raise HTTPException(status_code=403, detail="Reset is disabled on this CRM (PULSECHECK_ENABLE_ADMIN=0)")
-    if not r.ok:
-        raise HTTPException(status_code=502, detail=f"CRM error {r.status_code}")
+    if not RT.begin_reset():
+        raise HTTPException(status_code=409, detail="Wait for active agent work to finish before resetting demo data.")
+
     saver = getattr(app.state, "saver", None)
     delete = getattr(saver, "delete_thread", None)
-    for tid in list(RT.threads):
+    thread_ids = set(RT.threads)
+    list_checkpoints = getattr(saver, "list", None)
+    try:
+        if list_checkpoints:
+            try:
+                for checkpoint in list_checkpoints(None):
+                    config = getattr(checkpoint, "config", None) or {}
+                    thread_id = config.get("configurable", {}).get("thread_id")
+                    if thread_id:
+                        thread_ids.add(thread_id)
+            except Exception as error:  # noqa: BLE001
+                raise HTTPException(status_code=500, detail="Could not enumerate saved agent checkpoints; no demo data was reset.") from error
+
+        if thread_ids and not delete:
+            raise HTTPException(status_code=500, detail="This checkpointer cannot delete saved threads; no demo data was reset.")
         if delete:
             try:
-                delete(tid)
-            except Exception:  # noqa: BLE001
-                pass
-    with RT.lock:
-        RT.threads.clear()
-        RT.escalation_threads.clear()
-    _company_cache["at"] = 0.0
-    return {"status": "reseeded"}
+                for thread_id in thread_ids:
+                    delete(thread_id)
+            except Exception as error:  # noqa: BLE001
+                raise HTTPException(status_code=500, detail="Could not clear all saved agent checkpoints; retry the reset.") from error
+
+        r = crm("POST", "/admin/reseed")
+        if r.status_code == 404:
+            raise HTTPException(status_code=403, detail="Reset is disabled on this CRM (PULSECHECK_ENABLE_ADMIN=0)")
+        if not r.ok:
+            raise HTTPException(status_code=502, detail=f"CRM error {r.status_code}")
+
+        with RT.lock:
+            RT.threads.clear()
+            RT.escalation_threads.clear()
+        _company_cache["at"] = 0.0
+        return {"status": "reseeded", "message": "CRM data, chats, escalations, and agent checkpoints were restored to the original demo state."}
+    finally:
+        RT.end_reset()

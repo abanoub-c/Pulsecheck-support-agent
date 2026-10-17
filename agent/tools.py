@@ -16,6 +16,8 @@ import httpx
 
 # The base URL where your FastAPI mock CRM is running
 API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+INTERNAL_HEADERS = {"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}
 # ===========================================================================
 # BILLING AGENT TOOLS
 # ===========================================================================
@@ -25,7 +27,7 @@ def get_subscription(customer_id: str) -> dict:
     """Fetch the customer's current subscription details, plan limits, and billing status.
     Always use this to check plan tiers or monitor limits before answering billing questions."""
     try:
-        response = requests.get(f"{API_BASE}/subscriptions/{customer_id}")
+        response = requests.get(f"{API_BASE}/subscriptions/{customer_id}", headers=INTERNAL_HEADERS, timeout=10)
         response.raise_for_status()
         return response.json()
     except requests.HTTPError as e:
@@ -36,7 +38,7 @@ def get_invoices(customer_id: str) -> dict:
     """Fetch the customer's invoice history. Use this to check for failed payments or past charges.
     Returns {"count": n, "invoices": [...]}."""
     try:
-        response = requests.get(f"{API_BASE}/invoices/{customer_id}")
+        response = requests.get(f"{API_BASE}/invoices/{customer_id}", headers=INTERNAL_HEADERS, timeout=10)
         response.raise_for_status()
         invoices = response.json()
         return {"count": len(invoices), "invoices": invoices}
@@ -74,6 +76,8 @@ def change_subscription_plan(customer_id: str, new_tier: str) -> dict:
         response = requests.post(
             f"{API_BASE}/subscriptions/{customer_id}/change-plan",
             json={"new_tier": new_tier},
+            headers=INTERNAL_HEADERS,
+            timeout=10,
         )
         response.raise_for_status()
         return response.json()
@@ -104,6 +108,8 @@ def apply_credit(customer_id: str, amount: float, reason: str) -> dict:
         response = requests.post(
             f"{API_BASE}/subscriptions/{customer_id}/credit",
             json={"amount": amount, "reason": reason},
+            headers=INTERNAL_HEADERS,
+            timeout=10,
         )
         response.raise_for_status()
         return response.json()
@@ -142,7 +148,7 @@ def check_known_incidents() -> dict:
     seen: set[str] = set()
     try:
         for s in INCIDENT_STATUSES:
-            r = requests.get(f"{API_BASE}/incidents", params={"status": s}, timeout=10)
+            r = requests.get(f"{API_BASE}/incidents", params={"status": s}, headers=INTERNAL_HEADERS, timeout=10)
             r.raise_for_status()
             for inc in r.json():
                 if inc["incident_id"] not in seen:
@@ -175,6 +181,7 @@ def get_recent_tickets(customer_id: str, days: int = 14) -> list[dict]:
         resp = httpx.get(
             f"{API_BASE}/tickets",
             params={"customer_id": customer_id, "category": "technical", "days": days},
+            headers=INTERNAL_HEADERS,
             timeout=10.0,
         )
         resp.raise_for_status()
@@ -195,7 +202,7 @@ def create_bug_ticket(customer_id: str, subject: str, message: str, subtype: str
             "message": message,
             "status": "open"
         }
-        response = requests.post(f"{API_BASE}/tickets", json=payload)
+        response = requests.post(f"{API_BASE}/tickets", json=payload, headers=INTERNAL_HEADERS, timeout=10)
         response.raise_for_status()
         return response.json()
     except requests.HTTPError as e:
@@ -244,6 +251,7 @@ def get_historical_stats(customer_id: str, days: int = 30) -> dict:
     resp = httpx.get(
         f"{API_BASE}/monitors/{customer_id}/stats",
         params={"days": days},
+        headers=INTERNAL_HEADERS,
         timeout=10.0,
     )
     resp.raise_for_status()
@@ -266,7 +274,7 @@ def issue_refund(customer_id: str, amount: float, reason: str, confirmed: bool) 
     try:
         payload = {"customer_id": customer_id, "amount": amount, "reason": reason,
                     "currency": "USD", "confirmed": confirmed}
-        response = requests.post(f"{API_BASE}/refunds", json=payload)
+        response = requests.post(f"{API_BASE}/refunds", json=payload, headers=INTERNAL_HEADERS, timeout=10)
         response.raise_for_status()
         return response.json()
     except requests.HTTPError as e:
@@ -302,6 +310,8 @@ def cancel_subscription(customer_id: str, confirmed: bool) -> dict:
         response = requests.post(
             f"{API_BASE}/subscriptions/{customer_id}/cancel",
             json={"confirmed": confirmed},
+            headers=INTERNAL_HEADERS,
+            timeout=10,
         )
         response.raise_for_status()
         return response.json()
@@ -340,6 +350,8 @@ def apply_retention_discount(customer_id: str, discount_percent: int, duration_m
                 "duration_months": duration_months,
                 "reason": reason,
             },
+            headers=INTERNAL_HEADERS,
+            timeout=10,
         )
         response.raise_for_status()
         return response.json()

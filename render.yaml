@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: pulsecheck-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn service:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: PULSECHECK_DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: INTERNAL_API_KEY
+        generateValue: true
+
+  - type: web
+    name: pulsecheck-bff
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    healthCheckPath: /_app/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MOCK_API
+        value: "false"
+      - key: AGENT_API_URL
+        fromService:
+          name: pulsecheck-agent
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: INTERNAL_API_KEY
+        fromService:
+          name: pulsecheck-agent
+          type: web
+          envVarKey: INTERNAL_API_KEY
+      - key: CORS_ORIGINS
+        sync: false

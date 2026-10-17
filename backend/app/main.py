@@ -24,14 +24,16 @@ from uuid import uuid4
 
 from dateutil.relativedelta import relativedelta
 from fastapi import Depends, FastAPI, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import create_engine, select
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
 
 try:  # Supports both `uvicorn app.main:app` and `uvicorn main:app`.
     from .models import (
         Base,
         Customer,
+        Conversation,
+        ConversationMessage,
         DowntimeEvent,
         Escalation,
         Invoice,
@@ -53,6 +55,8 @@ except ImportError:  # pragma: no cover - used when running from backend/app.
     from models import (
         Base,
         Customer,
+        Conversation,
+        ConversationMessage,
         DowntimeEvent,
         Escalation,
         Invoice,
@@ -126,9 +130,18 @@ def compute_plan_change(subscription: Subscription, new_tier: str, today: date) 
 # App + database setup
 # ---------------------------------------------------------------------------
 DATABASE_URL = os.getenv("PULSECHECK_DATABASE_URL", "sqlite:///./pulsecheck.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://"):]
+elif DATABASE_URL.startswith("postgresql+psycopg2://"):
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql+psycopg2://"):]
 engine_kwargs: dict[str, Any] = {"future": True}
 if DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    # Neon may suspend idle compute; validate pooled connections before reuse.
+    engine_kwargs["pool_pre_ping"] = True
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -319,7 +332,17 @@ class EscalationRead(ORMModel):
     decision: str | None
     decision_note: str | None
     created_at: date
+    created_at_time: datetime | None = None
     resolved_at: date | None
+
+    @field_validator("created_at_time", mode="before")
+    @classmethod
+    def assume_utc_for_sqlite_timestamps(cls, value: Any) -> Any:
+        # SQLite doesn't retain timezone metadata for DateTime columns. These
+        # values are written in UTC, so restore that timezone before JSON output.
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class DowntimeEventSummary(ORMModel):
@@ -428,19 +451,117 @@ def _seed_is_current(db: Session) -> bool:
         return False
 
 
+def _ensure_pending_refund_escalations(db: Session) -> None:
+    """Keep every pending seeded refund visible and actionable in the review queue."""
+    pending_refunds = db.scalars(
+        select(Refund).where(Refund.status == "pending_review")
+    )
+    for refund in pending_refunds:
+        reason_code = (
+            "refund_exceeds_threshold"
+            if refund.amount >= Decimal("100.00")
+            else "refund_requires_review"
+        )
+        existing = db.scalar(
+            select(Escalation).where(
+                Escalation.status == "pending",
+                Escalation.category == "refund",
+                Escalation.ticket_id == refund.ticket_id,
+            )
+        )
+        if existing is not None:
+            # Link an already-created agent escalation to its CRM refund so the
+            # normal decision endpoint can update both records together.
+            action = dict(existing.proposed_action or {})
+            args = dict(action.get("args") or {})
+            action.setdefault("tool", "issue_refund")
+            action["refund_id"] = refund.refund_id
+            args.setdefault("customer_id", refund.customer_id)
+            args.setdefault("amount", float(refund.amount))
+            args.setdefault("currency", refund.currency)
+            action["args"] = args
+            existing.proposed_action = action
+            existing.reasoning = f"{reason_code} — {refund.reason}"
+            continue
+
+        db.add(Escalation(
+            # Use the same collision-resistant ID scheme as live escalations.
+            # Older/local databases may already contain an unrelated row with
+            # a former deterministic seed ID such as ESC-SEED-REF-0007.
+            escalation_id=_new_id("ESC"),
+            customer_id=refund.customer_id,
+            ticket_id=refund.ticket_id,
+            category="refund",
+            confidence=Decimal("0.950"),
+            reasoning=f"{reason_code} — {refund.reason}",
+            proposed_action={
+                "tool": "issue_refund",
+                "refund_id": refund.refund_id,
+                "args": {
+                    "customer_id": refund.customer_id,
+                    "amount": float(refund.amount),
+                    "currency": refund.currency,
+                },
+                "status": "pending_review",
+            },
+            conversation_summary=refund.reason,
+            status="pending",
+            created_at=refund.created_at,
+        ))
+
+
+def _upgrade_schema() -> None:
+    """Add nullable columns introduced after an existing local DB was created.
+
+    SQLAlchemy's create_all() creates missing tables, but intentionally does not
+    alter existing ones. Keep this small additive migration safe for both the
+    local SQLite database and the deployed PostgreSQL database.
+    """
+    inspector = inspect(engine)
+    additions = {
+        Conversation.__tablename__: ("agent_state", "trace_steps"),
+        Escalation.__tablename__: ("created_at_time",),
+    }
+    missing_columns = []
+    for table_name, names in additions.items():
+        if not inspector.has_table(table_name):
+            continue
+        existing = {column["name"] for column in inspector.get_columns(table_name)}
+        model_table = Base.metadata.tables[table_name]
+        missing_columns.extend(
+            (table_name, model_table.c[name]) for name in names if name not in existing
+        )
+    if not missing_columns:
+        return
+
+    with engine.begin() as connection:
+        for table_name, column in missing_columns:
+            # Names come from our declarative models, and the dialect compiles
+            # JSON/DATETIME appropriately for SQLite and PostgreSQL.
+            column_type = column.type.compile(dialect=engine.dialect)
+            connection.exec_driver_sql(
+                f'ALTER TABLE "{table_name}" ADD COLUMN "{column.name}" {column_type}'
+            )
+
+
 def seed_database(force: bool = False) -> None:
     """Create tables and load seed_data.py for an empty/outdated database or when forced."""
     if force:
         Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    _upgrade_schema()
     with SessionLocal() as db:
         if not force:
             if _seed_is_current(db):
+                # Existing local databases may predate the seeded review items.
+                _ensure_pending_refund_escalations(db)
+                db.commit()
                 return
             # Outdated schema or half-seeded database: rebuild cleanly.
             db.rollback()
             Base.metadata.drop_all(bind=engine)
             Base.metadata.create_all(bind=engine)
+            _upgrade_schema()
 
         db.add_all(Customer(**row) for row in CUSTOMERS)
         db.add_all(Subscription(**row) for row in SUBSCRIPTIONS)
@@ -449,6 +570,8 @@ def seed_database(force: bool = False) -> None:
         db.add_all(Invoice(**row) for row in INVOICES)
         db.add_all(Refund(**row) for row in REFUNDS)
         db.add_all(DowntimeEvent(**row) for row in DOWNTIME_EVENTS)
+        db.flush()
+        _ensure_pending_refund_escalations(db)
         db.commit()
 
 
@@ -892,6 +1015,7 @@ def create_escalation(payload: EscalationCreate, db: Session = Depends(get_db)) 
         conversation_summary=payload.conversation_summary,
         status="pending",
         created_at=date.today(),
+        created_at_time=datetime.now(timezone.utc),
     )
     db.add(escalation)
     db.commit()
@@ -936,13 +1060,56 @@ def list_escalations(
 class CustomerListItem(ORMModel):
     customer_id: str
     company_name: str
+    contact_name: str
+    contact_email: str
+    signup_date: date
     tier: str
     account_status: str
+    assigned_category: str
 
 
 @app.get("/customers", response_model=list[CustomerListItem], tags=["customers"])
-def list_customers(db: Session = Depends(get_db)) -> list[Customer]:
-    return list(db.scalars(select(Customer).order_by(Customer.customer_id)))
+def list_customers(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    customers = list(db.scalars(select(Customer).order_by(Customer.customer_id)))
+    counts: dict[str, dict[str, int]] = {}
+    for customer_id, category in db.execute(select(Ticket.customer_id, Ticket.category)):
+        customer_counts = counts.setdefault(customer_id, {})
+        customer_counts[category] = customer_counts.get(category, 0) + 1
+
+    # Return the most frequent category, using the same alphabetical tie-break
+    # as the Node mock adapter.
+    rows = []
+    for customer in customers:
+        customer_counts = counts.get(customer.customer_id, {})
+        assigned_category = (
+            sorted(customer_counts, key=lambda category: (-customer_counts[category], category))[0]
+            if customer_counts else "other"
+        )
+        rows.append({
+            "customer_id": customer.customer_id,
+            "company_name": customer.company_name,
+            "contact_name": customer.contact_name,
+            "contact_email": customer.contact_email,
+            "signup_date": customer.signup_date,
+            "tier": customer.tier,
+            "account_status": customer.account_status,
+            "assigned_category": assigned_category,
+        })
+    return rows
+
+
+@app.get("/analytics/tickets", tags=["analytics"])
+def ticket_analytics(days: int = Query(30, ge=1, le=30), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Summarize ticket volume and solved status by category for the UI."""
+    cutoff = date.today() - timedelta(days=days)
+    tickets = list(db.scalars(select(Ticket).where(Ticket.created_at >= cutoff)))
+    categories = ("billing", "technical", "refund", "other")
+    rows = []
+    for category in categories:
+        matches = [ticket for ticket in tickets if ticket.category == category]
+        solved = sum(ticket.status.lower() in {"resolved", "closed", "solved"} for ticket in matches)
+        rows.append({"category": category, "total": len(matches), "solved": solved, "unsolved": len(matches) - solved})
+    return {"range_days": days, "total": len(tickets), "by_category": rows}
 
 
 # ---- refunds: list + human decision ----

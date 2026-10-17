@@ -14,13 +14,14 @@ Python date objects, so seed rows can be passed directly to model constructors.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any , Optional
 
 from sqlalchemy import (
     JSON,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -259,10 +260,58 @@ class Escalation(Base):
     decision: Mapped[str | None] = mapped_column(String(20), nullable=True)
     decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[date] = mapped_column(ISODate, nullable=False)
+    # Keep the legacy date for seed compatibility and retain precise elapsed time
+    # for escalations created by the live application.
+    created_at_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[date | None] = mapped_column(ISODate, nullable=True)
 
     customer: Mapped[Customer] = relationship(back_populates="escalations")
     ticket: Mapped[Ticket | None] = relationship(back_populates="escalations")
+
+
+class Conversation(Base):
+    """Searchable conversation metadata; LangGraph checkpoints hold resumable agent state."""
+
+    __tablename__ = "conversations"
+
+    thread_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(
+        ForeignKey("customers.customer_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title: Mapped[str] = mapped_column(String(240), nullable=False, default="Support conversation")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+    escalation_id: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
+    agent_state: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    trace_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    messages: Mapped[list["ConversationMessage"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMessage.created_at",
+    )
+
+
+class ConversationMessage(Base):
+    """Durable customer-facing transcript, separate from LangGraph's internal state."""
+
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    thread_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.thread_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    trace: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
 
 # Useful indexes for the CRM list/filter endpoints.
@@ -280,6 +329,8 @@ __all__ = [
     "KnownIncident",
     "Refund",
     "Escalation",
+    "Conversation",
+    "ConversationMessage",
     "ISODate",
 ]
 

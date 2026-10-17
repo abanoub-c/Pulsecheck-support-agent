@@ -20,6 +20,7 @@ Changes in this version:
     (the eval runner, and any reviewer, can then see which specialist ran).
 """
 import os
+import json
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -56,8 +57,45 @@ def _text(content) -> str:
 # ---------------------------------------------------------------------------
 billing_tools_node = ToolNode(BILLING_TOOLS)
 technical_tools_node = ToolNode(TECHNICAL_TOOLS)
-refund_tools_node = ToolNode(REFUND_TOOLS)
+_refund_tools_node = ToolNode(REFUND_TOOLS)
 MAX_SPECIALIST_STEPS = int(os.getenv("MAX_SPECIALIST_STEPS", "8"))
+
+
+def refund_tools_node(state: SupportState) -> dict:
+    """Turn server-held refunds into an Ops escalation after the CRM records them."""
+    update = _refund_tools_node.invoke(state)
+    tool_messages = update.get("messages", [])
+    calls_by_id = {
+        call.get("id"): call
+        for message in state.get("messages", [])
+        for call in (getattr(message, "tool_calls", None) or [])
+    }
+    for message in tool_messages:
+        if not isinstance(message, ToolMessage) or message.name != "issue_refund":
+            continue
+        try:
+            result = json.loads(_text(message.content))
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(result, dict) or result.get("status") != "pending_review":
+            continue
+        call = calls_by_id.get(message.tool_call_id, {})
+        return {
+            **update,
+            "refund_id": result.get("refund_id"),
+            "proposed_action": {
+                "tool": "issue_refund",
+                "args": call.get("args", {}),
+                "refund_id": result.get("refund_id"),
+            },
+            "resolution_status": "escalated",
+            "escalation_reason": "refund_exceeds_threshold",
+        }
+    return update
+
+
+def route_after_refund_tools(state: SupportState) -> Literal["escalate", "refund"]:
+    return "escalate" if state.get("resolution_status") == "escalated" else "refund"
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +126,8 @@ def _audited(name: str, fn):
 # Escalation Node
 # ---------------------------------------------------------------------------
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+INTERNAL_HEADERS = {"X-Internal-Key": INTERNAL_API_KEY} if INTERNAL_API_KEY else {}
 
 
 def escalate_node(state: SupportState) -> dict:
@@ -120,6 +160,7 @@ def escalate_node(state: SupportState) -> dict:
             existing = requests.get(
                 f"{API_BASE}/escalations",
                 params={"status": "pending", "customer_id": customer_id},
+                headers=INTERNAL_HEADERS,
                 timeout=10,
             )
             if existing.ok:
@@ -151,6 +192,7 @@ def escalate_node(state: SupportState) -> dict:
                         "proposed_action": {**(payload["proposed_action"] or {}), "thread_id": state.get("thread_id")},
                         "conversation_summary": summary,
                     },
+                    headers=INTERNAL_HEADERS,
                     timeout=10,
                 )
                 escalation_id = resp.json().get("escalation_id") if resp.ok else None
@@ -284,7 +326,10 @@ builder.add_conditional_edges(
 # 4. Tool-to-specialist feedback loops
 builder.add_edge("billing_tools", "billing")
 builder.add_edge("technical_tools", "technical")
-builder.add_edge("refund_tools", "refund")
+builder.add_conditional_edges(
+    "refund_tools", route_after_refund_tools,
+    {"escalate": "escalate", "refund": "refund"},
+)
 
 # 5. Escalation endpoint
 builder.add_edge("escalate", END)
