@@ -14,7 +14,7 @@ What it does
 * Scores routing, tool use, guardrails, responses and state. The JSON report
   keeps a full transcript per case for error analysis.
 
-Usage (project root, backend running on :8000, GROQ_API_KEY in .env):
+Usage (project root, backend running, and the configured LLM key in .env):
     python -m agent.evals.eval_runner --lint            # dataset check only, no LLM calls
     python -m agent.evals.eval_runner                   # everything
     python -m agent.evals.eval_runner --ids EVAL-003 EVAL-011 -v
@@ -74,15 +74,14 @@ if sys.platform == "win32":
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-try:  # optional: load GROQ_API_KEY from .env
-    from dotenv import load_dotenv
+from project_env import load_project_env
 
-    load_dotenv(PROJECT_ROOT / ".env")
-except ImportError:
-    pass
+load_project_env()
 
-if not os.getenv("GROQ_API_KEY"):
-    sys.exit("GROQ_API_KEY is not set. Put it in a .env file at the project root (never hardcode it).")
+from agent.llm_config import configured_api_key
+
+if not configured_api_key():
+    sys.exit("No API key is configured for LLM_PROVIDER. Set LLM_API_KEY or its provider-specific key in the root .env.")
 
 import requests  # noqa: E402
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage  # noqa: E402

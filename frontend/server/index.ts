@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import apiRouter from './routes/api.js';
 
 const app = express();
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? process.env.FRONTEND_PORT ?? 3000);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 app.set('trust proxy', 1);

@@ -17,9 +17,9 @@ import os
 from datetime import datetime, timezone
 
 from langchain_core.messages import RemoveMessage, SystemMessage
-from langchain_groq import ChatGroq
 
 from agent.state import SupportState
+from agent.llm_config import create_chat_model
 from agent.tools import get_recent_tickets  # reuse, don't re-implement the HTTP call
 from langchain_core.messages import RemoveMessage, SystemMessage, ToolMessage
 
@@ -29,7 +29,7 @@ SESSION_GAP_HOURS = float(os.getenv("SESSION_GAP_HOURS", "1"))
 MAX_RAW_MESSAGES = int(os.getenv("MAX_RAW_MESSAGES", "20"))
 KEEP_RECENT_MESSAGES = int(os.getenv("KEEP_RECENT_MESSAGES", "8"))
 
-summarizer_llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0, api_key=os.getenv("GROQ_API_KEY"))
+summarizer_llm = create_chat_model("summarizer")
 
 
 def context_manager_node(state: SupportState) -> dict:

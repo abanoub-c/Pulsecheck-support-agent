@@ -9,8 +9,12 @@ React + TypeScript + Vite, React Router, Express BFF, Tailwind CSS semantic toke
 ## Run locally
 
 ```bash
-pnpm install
+# Run from the repository root once to create the shared local settings file.
 cp .env.example .env
+
+# Then enter frontend to install and run the UI/BFF.
+cd frontend
+pnpm install
 pnpm dev
 ```
 
@@ -18,7 +22,7 @@ Open `http://localhost:3000`. The BFF listens on `0.0.0.0` and serves the Vite a
 
 ## Mock mode
 
-Preview is designed to work without external services. `MOCK_API=true` is the default and keeps synthetic customer, ticket, subscription, incident, thread and escalation state in the running Node process. `POST /api/demo/reset` restores the initial fixture, clears generated chats and decisions, and restores the seeded $299 refund-review conversation and escalation. In live backend mode, it also clears transcript rows and LangGraph checkpoints before reseeding the CRM. The five demo paths are available through sample prompts:
+Set `MOCK_API=true` to run without external services; this keeps synthetic customer, ticket, subscription, incident, thread and escalation state in the running Node process. `POST /api/demo/reset` restores the initial fixture, clears generated chats and decisions, and restores the seeded $299 refund-review conversation and escalation. In live backend mode, it also clears transcript rows and LangGraph checkpoints before reseeding the CRM. The five demo paths are available through sample prompts:
 
 1. Crestpoint Systems downgrade succeeds and shows billing tool steps.
 2. Halcyon Cloud’s $299 refund is prepared and held for manager review.
@@ -30,7 +34,9 @@ The shared fixtures contain 25 customers, 25 subscriptions, 55 tickets and 7 inc
 
 ## Environment
 
-See `.env.example` for the safe defaults. `AGENT_API_URL` and `CRM_API_URL` are server-only. `MAX_MESSAGE_CHARS` defaults to 500 and `RATE_LIMIT_MESSAGES_PER_HOUR` defaults to 30. The BFF validates inputs with Zod, allow-lists chat customer IDs, rate-limits messages/resets, sets security headers, sanitizes agent Markdown in the browser, and never sends internal service URLs or API keys to the client.
+See the repository-root `.env.example` for the complete variable list. Keep the single local `.env` in the repository root; the Python service, agent, Node BFF, and Vite all load settings from there. `AGENT_API_URL`, `CRM_API_URL`, and `INTERNAL_API_KEY` are server-only. Deployment platforms should receive their values through Render or Vercel environment settings.
+
+All agent nodes use the shared factory in [`agent/llm_config.py`](../agent/llm_config.py). Change `LLM_PROVIDER`, `LLM_MODEL`, the provider key, and optional `LLM_*` settings in the root `.env`; the router, specialists, and summarizer pick them up after the Python service restarts. Supported providers are Groq, OpenAI, Anthropic, and OpenAI-compatible endpoints. Provider packages are listed in the root `requirements.txt`.
 
 ## Python CRM and agent mode
 
@@ -47,7 +53,7 @@ cd frontend
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The Python service reads `GROQ_API_KEY` and the CRM database configuration from the repository root `.env`. `frontend/.env` contains only the Node BFF's service URLs, port, and matching internal-service key. In live mode, chat, thread replay, escalations and human decisions use LangGraph; clients, incidents, ticket analytics and customer details use the CRM database. Demo reset reseeds the CRM and clears the agent's in-process thread logs. Copy `.env.example` to `.env` to use the standalone mock instead.
+Open `http://localhost:3000`. The Python service and frontend use the same repository-root `.env`; `AGENT_PORT` and `FRONTEND_PORT` keep their local ports separate. Set `MOCK_API=true` to use the standalone mock, or set `MOCK_API=false` and provide a valid `GROQ_API_KEY` to use the real agent and CRM. In live mode, chat, thread replay, escalations and human decisions use LangGraph; clients, incidents, ticket analytics and customer details use the CRM database. Demo reset reseeds the CRM and clears the agent's in-process thread logs.
 
 The CRM's customer list and ticket analytics endpoints provide the projections the UI needs. For a deployed setup, configure the same `INTERNAL_API_KEY` in both services and use the public URL of the combined FastAPI service for the BFF's `AGENT_API_URL` and `CRM_API_URL` values.
 
