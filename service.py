@@ -925,20 +925,20 @@ def demo_reset(_: None = Depends(require_key)) -> dict:
     if not RT.begin_reset():
         raise HTTPException(status_code=409, detail="Wait for active agent work to finish before resetting demo data.")
 
-    saver = getattr(app.state, "saver", None)
-    delete = getattr(saver, "delete_thread", None)
-    thread_ids = set(RT.threads)
-    list_checkpoints = getattr(saver, "list", None)
     try:
-        if list_checkpoints:
-            try:
-                for checkpoint in list_checkpoints(None):
-                    config = getattr(checkpoint, "config", None) or {}
-                    thread_id = config.get("configurable", {}).get("thread_id")
-                    if thread_id:
-                        thread_ids.add(thread_id)
-            except Exception as error:  # noqa: BLE001
-                raise HTTPException(status_code=500, detail="Could not enumerate saved agent checkpoints; no demo data was reset.") from error
+        saver = getattr(app.state, "saver", None)
+        delete = getattr(saver, "delete_thread", None)
+        thread_ids = set(RT.threads)
+        # Every durable chat transcript has a CRM Conversation row with the
+        # same thread ID as its LangGraph checkpoint. Read that compact index
+        # instead of asking LangGraph to materialize every checkpoint (which
+        # can fail or time out on a large Neon checkpoint history).
+        try:
+            with SessionLocal() as db:
+                thread_ids.update(db.scalars(select(Conversation.thread_id)).all())
+        except Exception as error:  # noqa: BLE001
+            print(f"Could not enumerate saved chat records for demo reset: {error}", flush=True)
+            raise HTTPException(status_code=500, detail="Could not read saved chat records; no demo data was reset.") from error
 
         if thread_ids and not delete:
             raise HTTPException(status_code=500, detail="This checkpointer cannot delete saved threads; no demo data was reset.")
@@ -947,15 +947,16 @@ def demo_reset(_: None = Depends(require_key)) -> dict:
                 for thread_id in thread_ids:
                     delete(thread_id)
             except Exception as error:  # noqa: BLE001
+                print(f"Could not clear saved agent checkpoints for demo reset: {error}", flush=True)
                 raise HTTPException(status_code=500, detail="Could not clear all saved agent checkpoints; retry the reset.") from error
 
         # The CRM is mounted inside this same FastAPI app. Reseed it directly
-        # instead of making an HTTP request back into this process; the
-        # loopback request can time out while Postgres drops and recreates the
-        # seed tables.
+        # instead of making an HTTP request back into this process; the loopback
+        # request can time out while Postgres drops and recreates the seed tables.
         try:
             seed_database(force=True)
         except Exception as error:  # noqa: BLE001
+            print(f"Could not restore the CRM seed data during demo reset: {error}", flush=True)
             raise HTTPException(status_code=500, detail="Could not restore the CRM database from the original seed data.") from error
 
         with RT.lock:
