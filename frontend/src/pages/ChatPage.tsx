@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowUpRight, CircleAlert, Headphones, LoaderCircle, MessageSquareText, RotateCcw, Send, ShieldCheck } from 'lucide-react';
-import { ApiRequestError, getCustomerConversations, getHealth, getThread, getThreadId, postChat } from '../lib/api';
+import { ApiRequestError, getCustomerConversations, getThread, getThreadId, postChat, waitForAgentReady } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import type { ChatMessage, ConversationSummary, SseEvent, ThreadState, TraceStep } from '../lib/types';
 import { PageIntro, StatusChip } from '../components/ui/Primitives';
@@ -143,15 +143,14 @@ export default function ChatPage() {
     let agentError = false;
     const elapsedTimer = window.setInterval(() => setElapsed((value) => value + 1), 1000);
     const wakeTimer = window.setTimeout(() => setWaking(true), 3000);
-    const warmupPoll = window.setInterval(async () => {
-      try { const health = await getHealth(); if (health.agent_ready) setWaking((value) => value); } catch { /* keep waiting while the service starts */ }
-    }, 2000);
     const hardTimeout = window.setTimeout(() => {
       controller.abort();
       setErrorMessage('The agent did not become ready within 90 seconds. Please retry.');
       setRetryMessage(text);
     }, 90_000);
     try {
+      await waitForAgentReady(controller.signal);
+      setWaking(false);
       await postChat({ thread_id: threadId, customer_id: selectedCustomerId, message_id: messageId, message: text }, (event: SseEvent) => {
         if (event.event === 'step') {
           const step = readTraceStep(event.data);
@@ -186,7 +185,7 @@ export default function ChatPage() {
         notify(message, 'error');
       }
     } finally {
-      window.clearInterval(elapsedTimer); window.clearInterval(warmupPoll); window.clearTimeout(wakeTimer); window.clearTimeout(hardTimeout);
+      window.clearInterval(elapsedTimer); window.clearTimeout(wakeTimer); window.clearTimeout(hardTimeout);
       setStreaming(false); setWaking(false); abortRef.current = null;
       void refreshHistory();
       if (!finished && controller.signal.aborted) setThreadStatus((state) => state === 'escalated' ? state : 'open');

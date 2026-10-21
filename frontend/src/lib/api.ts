@@ -3,6 +3,7 @@ import { consumeEventStream } from './sse';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
+const RENDER_WAKE_RETRY_DELAYS_MS = [2_000, 3_000, 5_000, 8_000, 12_000, 15_000, 15_000, 15_000];
 
 export class ApiRequestError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -11,20 +12,76 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+function waitForRetry(delayMs: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException('The request was aborted.', 'AbortError'));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('The request was aborted.', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
-  if (!response.ok) {
+}
+
+async function request<T>(path: string, init?: RequestInit, options: { retryForWake?: boolean } = {}): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const retryForWake = method === 'GET' && options.retryForWake !== false;
+  const headers = { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers };
+  let retryIndex = 0;
+
+  while (true) {
+    let response: Response;
+    try {
+      response = await fetch(apiUrl(path), { ...init, headers });
+    } catch (error) {
+      if (init?.signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw error;
+      if (!retryForWake || retryIndex >= RENDER_WAKE_RETRY_DELAYS_MS.length) {
+        if (retryForWake) {
+          throw new ApiRequestError('Cannot reach the support API. Check the Vercel API URL and Render CORS settings, then retry.', 0);
+        }
+        throw error;
+      }
+      await waitForRetry(RENDER_WAKE_RETRY_DELAYS_MS[retryIndex++], init?.signal);
+      continue;
+    }
+
+    if (response.ok) return response.json() as Promise<T>;
+
+    const shouldRetry = retryForWake && [502, 503, 504].includes(response.status);
+    if (shouldRetry && retryIndex < RENDER_WAKE_RETRY_DELAYS_MS.length) {
+      await waitForRetry(RENDER_WAKE_RETRY_DELAYS_MS[retryIndex++], init?.signal);
+      continue;
+    }
+
     const body = await response.json().catch(() => ({ error: 'Request failed.' })) as ApiError;
     throw new ApiRequestError(body.error || `Request failed (${response.status}).`, response.status);
   }
-  return response.json() as Promise<T>;
 }
 
-export async function getHealth() {
-  return request<{ status: string; agent_ready: boolean; mode: string }>('/api/health');
+export async function getHealth(signal?: AbortSignal) {
+  return request<{ status: string; agent_ready: boolean; mode: string }>('/api/health', { signal }, { retryForWake: false });
+}
+export async function waitForAgentReady(signal: AbortSignal, timeoutMs = 85_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!signal.aborted && Date.now() < deadline) {
+    try {
+      const health = await getHealth(signal);
+      if (health.agent_ready) return;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      // A starting, sleeping, or temporarily unreachable Render service is expected here.
+    }
+    const remaining = deadline - Date.now();
+    if (remaining > 0) await waitForRetry(Math.min(4_000, remaining), signal);
+  }
+  if (!signal.aborted) throw new ApiRequestError('The support service is still waking up. Check the Render service logs and try again.', 503);
 }
 export async function getDemoCustomers() {
   const data = await request<{ items: Array<{ customer_id: string; company: string; tier: string; status: string; prompt: string }> }>('/api/demo/customers');

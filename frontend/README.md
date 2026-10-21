@@ -86,6 +86,10 @@ VITE_API_BASE_URL=https://your-pulsecheck-bff.onrender.com
 
 Redeploy after changing this value because Vite embeds it in the browser bundle. `frontend/vercel.json` supplies the SPA route fallback so direct links such as `/chat` work.
 
+### Render Free cold starts
+
+Render Free web services can spin down after inactivity. The first request wakes the BFF and agent; allow roughly a minute for them to start. The UI retries safe data reads during transient network, 502, 503, or 504 errors, and Chat waits up to 85 seconds for `/api/health` to report the agent ready before it sends a message. It never automatically repeats chat, escalation-decision, or reset writes. A persistent error after this window points to a deployment or environment setting problem rather than normal sleep.
+
 ### What persists
 
 - `conversations` and `conversation_messages` hold the customer-facing history and execution traces. The Chat page can list and reopen conversations for the selected customer.
