@@ -48,7 +48,7 @@ function internalHeaders(): Record<string, string> {
   return key ? { 'x-internal-key': key } : {};
 }
 
-async function proxyJson(req: Request, res: Response, pathAndQuery: string, method = req.method, body?: unknown) {
+async function proxyJson(req: Request, res: Response, pathAndQuery: string, method = req.method, body?: unknown, timeoutMs = 25_000) {
   const url = agentUrl(pathAndQuery);
   if (!url) return res.status(503).json({ error: 'Agent service URL is not configured. Enable mock mode or configure AGENT_API_URL.' });
   try {
@@ -56,7 +56,7 @@ async function proxyJson(req: Request, res: Response, pathAndQuery: string, meth
       method,
       headers: { 'content-type': 'application/json', accept: req.header('accept') ?? 'application/json', ...internalHeaders() },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const text = await response.text();
     res.status(response.status).type(response.headers.get('content-type') ?? 'application/json').send(text);
@@ -84,15 +84,6 @@ async function getCrmJson<T>(pathAndQuery: string): Promise<T> {
   const response = await fetch(url, { headers: { ...internalHeaders() }, signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`CRM request failed (${response.status}).`);
   return response.json() as Promise<T>;
-}
-
-async function crmCustomerExists(customerId: string) {
-  const url = crmUrl(`customers/${encodeURIComponent(customerId)}`);
-  if (!url) throw new Error('CRM_API_URL is not configured.');
-  const response = await fetch(url, { headers: { ...internalHeaders() }, signal: AbortSignal.timeout(10_000) });
-  if (response.status === 404) return false;
-  if (!response.ok) throw new Error(`CRM customer lookup failed (${response.status}).`);
-  return true;
 }
 
 function dateAtRuntime(value: string | null | undefined) {
@@ -133,12 +124,6 @@ router.post('/chat', async (req, res) => {
   if (input.message.length > maxChars) return res.status(413).json({ error: `Message must be ${maxChars} characters or fewer.` });
   if (useMock()) {
     if (!isDemoCustomer(input.customer_id)) return res.status(403).json({ error: 'This customer is not available for chat.' });
-  } else {
-    try {
-      if (!await crmCustomerExists(input.customer_id)) return res.status(403).json({ error: 'This customer is not available for chat.' });
-    } catch (error) {
-      return res.status(502).json({ error: error instanceof Error ? error.message : 'Unable to validate this customer with the CRM.', retryable: true });
-    }
   }
   if (!limited(`messages:${ipKey(req)}`, messageLimit, 60 * 60 * 1000)) return res.status(429).json({ error: 'Message limit reached. Try again later.' });
   const last = lastThreadMessage.get(input.thread_id) ?? 0;
@@ -241,7 +226,7 @@ router.post('/escalations/:escalationId/decision', async (req, res) => {
   if (!parsed.success) return sendValidationError(res, parsed.error);
   if (parsed.data.action === 'reject' && !parsed.data.note?.trim()) return res.status(400).json({ error: 'A short note is required when rejecting an escalation.' });
   if (parsed.data.action === 'edit' && !parsed.data.customer_message?.trim()) return res.status(400).json({ error: 'Add the edited message before sending.' });
-  if (!useMock()) return proxyJson(req, res, `escalations/${encodeURIComponent(req.params.escalationId)}/decision`, 'POST', parsed.data);
+  if (!useMock()) return proxyJson(req, res, `escalations/${encodeURIComponent(req.params.escalationId)}/decision`, 'POST', parsed.data, 60_000);
   const record = decideEscalation({ escalationId: req.params.escalationId, action: parsed.data.action, customerMessage: parsed.data.customer_message, note: parsed.data.note });
   if (!record) return res.status(404).json({ error: 'Escalation not found.' });
   return res.json({ status: 'ok', escalation: record });

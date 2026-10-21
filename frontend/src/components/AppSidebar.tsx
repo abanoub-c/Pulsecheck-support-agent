@@ -54,14 +54,17 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
   useEffect(() => {
     let active = true;
     getCustomerDetail(selectedCustomerId).then((data) => { if (active) setDetail(data); }).catch(() => { if (active) setDetail(null); });
-    getEscalations('pending').then(({ items }) => {
+    const refreshPending = () => getEscalations('pending').then(({ items }) => {
       if (!active) return;
       setPendingCount(items.length);
       const waiting = items.some((item) => item.customer_id === selectedCustomerId);
       setThreadStatus(waiting ? 'Waiting for a human' : 'Open');
-    }).catch(() => setPendingCount(0));
-    return () => { active = false; };
-  }, [selectedCustomerId, location.pathname]);
+    }).catch(() => undefined);
+    void refreshPending();
+    const onEscalationsUpdated = () => { void refreshPending(); };
+    window.addEventListener('pulsecheck:escalations-updated', onEscalationsUpdated);
+    return () => { active = false; window.removeEventListener('pulsecheck:escalations-updated', onEscalationsUpdated); };
+  }, [selectedCustomerId]);
 
   useEffect(() => { setSettingsOpen(false); }, [location.pathname]);
 

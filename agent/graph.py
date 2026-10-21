@@ -153,28 +153,40 @@ def escalate_node(state: SupportState) -> dict:
     escalation_id = None
 
     # interrupt() re-runs this node from the top on resume, so anything above it must be
-    # idempotent: look for the row we already created (same customer, ticket and summary)
-    # before POSTing a new one.
+    # idempotent: the human decision may already have changed this row to "resolved".
     if customer_id:
-        try:
-            existing = requests.get(
-                f"{API_BASE}/escalations",
-                params={"status": "pending", "customer_id": customer_id},
-                headers=INTERNAL_HEADERS,
-                timeout=10,
-            )
-            if existing.ok:
+        for status in ("pending", "resolved"):
+            try:
+                existing = requests.get(
+                    f"{API_BASE}/escalations",
+                    params={"status": status, "customer_id": customer_id},
+                    headers=INTERNAL_HEADERS,
+                    timeout=10,
+                )
+                if not existing.ok:
+                    continue
+                rows = existing.json()
                 match = next(
                     (
-                        e for e in existing.json()
-                        if e.get("ticket_id") == ticket_id and e.get("conversation_summary") == summary
+                        row for row in rows
+                        if isinstance(row.get("proposed_action"), dict)
+                        and row["proposed_action"].get("thread_id") == state.get("thread_id")
                     ),
                     None,
                 )
+                if match is None and status == "pending":
+                    match = next(
+                        (
+                            row for row in rows
+                            if row.get("ticket_id") == ticket_id and row.get("conversation_summary") == summary
+                        ),
+                        None,
+                    )
                 if match:
                     escalation_id = match["escalation_id"]
-        except requests.RequestException:
-            pass
+                    break
+            except (requests.RequestException, ValueError, TypeError):
+                continue
 
         if escalation_id is None:
             try:

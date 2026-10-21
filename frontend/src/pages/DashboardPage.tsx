@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowUpRight, BadgeCheck, Clock3, FileText, RefreshCw, ShieldAlert, X } from 'lucide-react';
-import { decideEscalation, getCustomerDetail, getDashboardSummary, getEscalations, getIncidents } from '../lib/api';
+import { AlertTriangle, ArrowUpRight, BadgeCheck, Clock3, FileText, LoaderCircle, RefreshCw, ShieldAlert, X } from 'lucide-react';
+import { decideEscalation, getCustomerDetail, getDashboardSummary, getEscalations } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import type { CustomerDetail, DashboardSummary, Escalation } from '../lib/types';
 import { Button, EmptyState, ErrorState, PageIntro, Skeleton, StatusChip } from '../components/ui/Primitives';
@@ -68,10 +68,10 @@ export default function DashboardPage() {
   const load = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
     try {
-      const [data, incidentData, dashboardSummary] = await Promise.all([getEscalations(status), getIncidents('open'), getDashboardSummary()]);
+      const [data, dashboardSummary] = await Promise.all([getEscalations(status), getDashboardSummary()]);
       setItems(data.items);
       setSummary(dashboardSummary);
-      setOpenIncidents(incidentData.total);
+      setOpenIncidents(dashboardSummary.open_incidents ?? 0);
       setError('');
       setSelectedId((current) => data.items.some((item) => item.escalation_id === current) ? current : data.items[0]?.escalation_id ?? '');
     } catch (exception) {
@@ -79,7 +79,12 @@ export default function DashboardPage() {
     } finally { if (initial) setLoading(false); }
   }, [status]);
 
-  useEffect(() => { void load(true); const timer = window.setInterval(() => void load(), 10000); return () => window.clearInterval(timer); }, [load]);
+  useEffect(() => {
+    void load(true);
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => { document.removeEventListener('visibilitychange', refreshWhenVisible); };
+  }, [load]);
   useEffect(() => {
     const selected = items.find((item) => item.escalation_id === selectedId);
     if (!selected) { setDraft(''); return; }
@@ -107,20 +112,28 @@ export default function DashboardPage() {
     if (action === 'reject' && !rejecting) { setRejecting(true); return; }
     if (action === 'reject' && !rejectNote.trim()) { notify('Add a short note before rejecting.', 'error'); return; }
     const previous = selected;
+    const previousSummary = summary;
     const customerMessage = action === 'reject' ? 'A human specialist reviewed your request. Please reply if you would like help with another option.' : draft.trim();
     const decisionAt = new Date().toISOString();
-    setItems((current) => current.map((item) => item.escalation_id === selected.escalation_id ? { ...item, status: 'resolved', decision: action, decision_note: action === 'reject' ? rejectNote.trim() : null, customer_message: customerMessage, resolved_at: decisionAt } : item));
     setActing(true);
+    setItems((current) => current.map((item) => item.escalation_id === selected.escalation_id ? { ...item, status: 'resolved', decision: action, decision_note: action === 'reject' ? rejectNote.trim() : null, customer_message: customerMessage, resolved_at: decisionAt } : item));
+    setSummary((current) => current ? {
+      ...current,
+      awaiting_review: current.awaiting_review === null ? null : Math.max(0, current.awaiting_review - 1),
+      refunds_pending_review: selected.category === 'refund' && current.refunds_pending_review !== null ? Math.max(0, current.refunds_pending_review - 1) : current.refunds_pending_review,
+    } : current);
     try {
       await decideEscalation(selected.escalation_id, {
         action,
         customer_message: customerMessage,
         note: action === 'reject' ? rejectNote.trim() : undefined,
       });
-      notify(action === 'reject' ? 'Escalation rejected and returned to the customer.' : 'Decision sent. The conversation has been updated.');
+      window.dispatchEvent(new Event('pulsecheck:escalations-updated'));
+      notify('Decision saved. The customer conversation is updating in the background.');
       setEditing(false); setRejecting(false); setRejectNote('');
     } catch (exception) {
       setItems((current) => current.map((item) => item.escalation_id === previous.escalation_id ? previous : item));
+      setSummary(previousSummary);
       notify(exception instanceof Error ? exception.message : 'Could not save the decision.', 'error');
     } finally { setActing(false); }
   };
@@ -168,7 +181,7 @@ export default function DashboardPage() {
 
       <section className="panel detail-panel" aria-labelledby="detail-title">
         {!selected ? <EmptyState title="Select an escalation" description="Choose a queue item to review its context and proposed action." /> : <>
-          <div className="panel-heading detail-heading"><div><div className="panel-kicker">Review request</div><h2 id="detail-title">{selected.customer_company_name}</h2></div><StatusChip tone={selected.status === 'pending' ? reasonTone(selected.reasoning) : 'success'}>{selected.status === 'pending' ? 'Pending review' : 'Resolved'}</StatusChip></div>
+          <div className="panel-heading detail-heading"><div><div className="panel-kicker">Review request</div><h2 id="detail-title">{selected.customer_company_name}</h2></div><StatusChip tone={acting ? 'warning' : selected.status === 'pending' ? reasonTone(selected.reasoning) : 'success'}>{acting ? 'Saving decision' : selected.status === 'pending' ? 'Pending review' : 'Resolved'}</StatusChip></div>
           <div className="detail-meta"><span>{selected.customer_id}</span><span>{customerDetail?.subscription?.tier ?? 'Plan loading'}</span><StatusChip tone={customerDetail?.customer.account_status === 'active' ? 'success' : customerDetail?.customer.account_status === 'cancelled' ? 'neutral' : 'warning'}>{customerDetail?.customer.account_status === 'active' ? 'Active' : customerDetail?.customer.account_status === 'cancelled' ? 'Inactive' : customerDetail ? 'Pending' : customerDetailError ? 'Status unavailable' : 'Status loading'}</StatusChip><span>{Math.round(selected.confidence * 100)}% confidence</span></div>
           <div className="detail-section"><h3>Why it was escalated</h3><p>{reasonLabels[reasonCode(selected)] ?? reasonCode(selected).replaceAll('_', ' ')}</p>{selected.reasoning.includes(' — ') && <p className="detail-muted">{selected.reasoning.split(' — ').slice(1).join(' — ')}</p>}<p className="detail-muted">{selected.conversation_summary}</p></div>
           <div className="detail-section"><h3>Agent’s proposed action</h3><pre className="proposal-code">{JSON.stringify(selected.proposed_action, null, 2)}</pre></div>
@@ -182,7 +195,7 @@ export default function DashboardPage() {
             {!editing && <Button variant="secondary" onClick={() => void submitDecision('edit')}>Edit</Button>}
             <Button variant="quiet" className="reject-button" onClick={() => void submitDecision('reject')} disabled={acting}>{rejecting ? 'Confirm reject' : 'Reject'}</Button>
           </div>}
-          {selected.status === 'resolved' && <div className="resolved-note"><BadgeCheck size={15} /> Decision recorded {selected.resolved_at ? `· ${new Date(selected.resolved_at).toLocaleString()}` : ''}</div>}
+          {selected.status === 'resolved' && <div className="resolved-note">{acting ? <LoaderCircle className="spin" size={15} /> : <BadgeCheck size={15} />}{acting ? 'Saving decision and updating the conversation…' : `Decision recorded${selected.resolved_at ? ` · ${new Date(selected.resolved_at).toLocaleString()}` : ''}`}</div>}
         </>}
       </section>
     </div>

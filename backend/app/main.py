@@ -1055,6 +1055,14 @@ def list_escalations(
     return list(db.scalars(statement))
 
 
+@app.get("/escalations/{escalation_id}", response_model=EscalationRead, tags=["escalations"])
+def get_escalation(escalation_id: str, db: Session = Depends(get_db)) -> Escalation:
+    escalation = db.get(Escalation, escalation_id)
+    if escalation is None:
+        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
+    return escalation
+
+
 
 # ---------------------------------------------------------------------------
 # CRM ADDITIONS for backend/app/main.py

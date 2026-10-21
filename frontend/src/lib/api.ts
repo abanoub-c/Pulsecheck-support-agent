@@ -6,6 +6,7 @@ const defaultProductionApiBaseUrl = 'https://pulsecheck-bff.onrender.com';
 const API_BASE_URL = (configuredApiBaseUrl || (import.meta.env.PROD ? defaultProductionApiBaseUrl : '')).replace(/\/$/, '');
 const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
 const RENDER_WAKE_RETRY_DELAYS_MS = [2_000, 3_000, 5_000, 8_000, 12_000, 15_000, 15_000, 15_000];
+let agentReadyUntil = 0;
 
 export class ApiRequestError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -13,6 +14,8 @@ export class ApiRequestError extends Error {
     this.name = 'ApiRequestError';
   }
 }
+
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
 
 function waitForRetry(delayMs: number, signal?: AbortSignal | null) {
   return new Promise<void>((resolve, reject) => {
@@ -32,7 +35,24 @@ function waitForRetry(delayMs: number, signal?: AbortSignal | null) {
   });
 }
 
-async function request<T>(path: string, init?: RequestInit, options: { retryForWake?: boolean } = {}): Promise<T> {
+function request<T>(path: string, init?: RequestInit, options: { retryForWake?: boolean } = {}): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' || init?.signal) return requestUncached<T>(path, init, options);
+
+  const key = `${path}:${options.retryForWake !== false}`;
+  const existing = inFlightGetRequests.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+
+  const pending = requestUncached<T>(path, init, options);
+  inFlightGetRequests.set(key, pending);
+  void pending.then(
+    () => { if (inFlightGetRequests.get(key) === pending) inFlightGetRequests.delete(key); },
+    () => { if (inFlightGetRequests.get(key) === pending) inFlightGetRequests.delete(key); },
+  );
+  return pending;
+}
+
+async function requestUncached<T>(path: string, init?: RequestInit, options: { retryForWake?: boolean } = {}): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
   const retryForWake = method === 'GET' && options.retryForWake !== false;
   const headers = { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers };
@@ -68,9 +88,12 @@ async function request<T>(path: string, init?: RequestInit, options: { retryForW
 }
 
 export async function getHealth(signal?: AbortSignal) {
-  return request<{ status: string; agent_ready: boolean; mode: string }>('/api/health', { signal }, { retryForWake: false });
+  const health = await request<{ status: string; agent_ready: boolean; mode: string }>('/api/health', { signal }, { retryForWake: false });
+  if (health.agent_ready) agentReadyUntil = Date.now() + 60_000;
+  return health;
 }
 export async function waitForAgentReady(signal: AbortSignal, timeoutMs = 85_000) {
+  if (Date.now() < agentReadyUntil) return;
   const deadline = Date.now() + timeoutMs;
   while (!signal.aborted && Date.now() < deadline) {
     try {

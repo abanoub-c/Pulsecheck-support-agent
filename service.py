@@ -40,6 +40,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Iterator, Literal, Optional
@@ -57,7 +58,7 @@ CRM_API_URL = os.getenv("CRM_API_URL", f"http://127.0.0.1:{PORT}/crm").rstrip("/
 os.environ["API_BASE"] = CRM_API_URL  # the combined service always routes agent tools through its mounted CRM
 
 import requests  # noqa: E402
-from fastapi import Depends, FastAPI, Header, HTTPException, Query  # noqa: E402
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: E402
@@ -529,6 +530,8 @@ def _record(th: dict, event: str, data: dict) -> None:
             "at": at,
             "by": by,
         }
+        if by == "human" and data.get("content") == th.get("pending_human_message"):
+            message["id"] = th.get("pending_human_message_id", message["id"])
         if any(existing.get("id") == message["id"] for existing in th["messages"]):
             return
         if by != "customer":
@@ -777,6 +780,54 @@ def _escalation_thread(esc: dict) -> Optional[str]:
     return (action.get("thread_id") if isinstance(action, dict) else None) or RT.escalation_threads.get(esc["escalation_id"])
 
 
+def _complete_escalation_resume(
+    thread_id: str, customer_id: str, escalation_id: str, action: str, customer_message: str
+) -> None:
+    """Finish LangGraph work after the durable review decision has returned to the UI."""
+    try:
+        th = RT.threads.get(thread_id) or _load_thread(thread_id, customer_id)
+        if th is None:
+            return
+
+        state = dict(th.get("state") or {})
+        state.update({"resolution_status": "resolved", "escalation_reason": None})
+        th["pending_human_message"] = customer_message
+        th["pending_human_message_id"] = f"decision-{escalation_id}"
+        # Keep the thread paused until the graph checkpoint is resumed, but make
+        # the human's message visible in the durable transcript right away.
+        th["status"] = "escalated"
+
+        if not any(row.get("id") == th["pending_human_message_id"] for row in th["messages"]):
+            reply = {"id": th["pending_human_message_id"], "role": "human", "content": customer_message, "at": _now()}
+            th["messages"].append(reply)
+            _save_conversation_message(th, reply)
+
+        snapshot, interrupts = _snapshot(thread_id) if th["started"] else (None, [])
+        if not interrupts:
+            _save_conversation_state(th, state, "resolved", escalation_id)
+            return
+
+        _save_conversation_state(th, state, "escalated", escalation_id)
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 40}
+        resume = {"action": "reject" if action == "reject" else "approve", "customer_message": customer_message}
+        for chunk in G().stream(Command(resume=resume), config, stream_mode="updates"):
+            for node, update in chunk.items():
+                if node.startswith("__") or not isinstance(update, dict):
+                    continue
+                for event, data in events_for(node, update):
+                    _record(th, event, data)
+
+        snapshot, interrupts = _snapshot(thread_id)
+        values = dict(snapshot.values or {})
+        state = _state_view(values, interrupts)
+        status = "escalated" if interrupts else state.get("resolution_status") or "resolved"
+        _save_conversation_state(th, state, status, escalation_id)
+    except Exception as error:  # noqa: BLE001
+        print(f"Background escalation resume failed for {escalation_id}: {error}", flush=True)
+    finally:
+        RT.release(thread_id)
+
+
 @app.get("/api/escalations")
 def list_escalations(status: str = Query(default="pending"), _: None = Depends(require_key)) -> list[dict]:
     r = crm("GET", "/escalations", params={"status": status})
@@ -799,53 +850,50 @@ class DecisionBody(BaseModel):
 
 
 @app.post("/api/escalations/{escalation_id}/decision")
-def decide(escalation_id: str, body: DecisionBody, _: None = Depends(require_key)) -> dict:
-    r = crm("GET", "/escalations", params={"status": "pending"})
-    esc = next((e for e in (r.json() if r.ok else []) if e["escalation_id"] == escalation_id), None)
-    if esc is None:
-        raise HTTPException(status_code=404, detail="No pending escalation with that id")
+def decide(
+    escalation_id: str,
+    body: DecisionBody,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(require_key),
+) -> dict:
+    r = crm("GET", f"/escalations/{escalation_id}")
+    if r.status_code == 404:
+        raise HTTPException(status_code=404, detail="No escalation with that id")
+    if not r.ok:
+        raise HTTPException(status_code=502, detail="Could not load the escalation record")
+    esc = r.json()
+    if esc.get("status") != "pending":
+        raise HTTPException(status_code=409, detail=f"Escalation is already {esc.get('status', 'resolved')}.")
 
-    # Resume the paused conversation FIRST: the escalate node re-runs from the top on resume and looks for
-    # its still-pending CRM row; resolving the row before this would make it create a duplicate.
     thread_id = _escalation_thread(esc)
-    resumed = False
-    th = _load_thread(thread_id) if thread_id else None
-    if th is not None and th["started"]:
-        _, interrupts = _snapshot(thread_id)
-        if interrupts and RT.claim(thread_id):
-            try:
-                approved = body.action in ("approve", "edit")
-                message = (body.customer_message or "").strip() or (DEFAULT_APPROVE if approved else DEFAULT_REJECT)
-                resume = {"action": "approve" if approved else "reject", "customer_message": message}
-                config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 40}
-                for chunk in G().stream(Command(resume=resume), config, stream_mode="updates"):
-                    for node, update in chunk.items():
-                        if node.startswith("__") or not isinstance(update, dict):
-                            continue
-                        for ev, data in events_for(node, update):
-                            _record(th, ev, data)
-                resumed = True
-            except Exception as e:  # noqa: BLE001
-                raise HTTPException(status_code=500, detail=f"Could not resume the conversation: {e}") from e
-            finally:
-                RT.release(thread_id)
+    resume_scheduled = bool(thread_id)
+    if resume_scheduled and not RT.claim(thread_id):
+        raise HTTPException(status_code=409, detail="This conversation is busy. Please retry the decision in a moment.")
 
-    d = crm("PATCH", f"/escalations/{escalation_id}/decision", json={"decision": body.action, "note": body.note})
-    if not d.ok:
-        raise HTTPException(status_code=d.status_code, detail=d.json().get("detail", "CRM rejected the decision"))
+    approved = body.action in ("approve", "edit")
+    message = (body.customer_message or "").strip() or (DEFAULT_APPROVE if approved else DEFAULT_REJECT)
+    try:
+        decision = crm("PATCH", f"/escalations/{escalation_id}/decision", json={"decision": body.action, "note": body.note})
+        if not decision.ok:
+            raise HTTPException(status_code=decision.status_code, detail=decision.json().get("detail", "CRM rejected the decision"))
 
-    refund_updated = False
-    action = esc.get("proposed_action")
-    refund_id = action.get("refund_id") if isinstance(action, dict) else None
-    if refund_id and body.action in ("approve", "reject"):
-        rr = crm("PATCH", f"/refunds/{refund_id}", json={"action": body.action, "note": body.note})
-        refund_updated = rr.ok
-    if th is not None:
-        state = dict(th.get("state") or {})
-        state.update({"resolution_status": "resolved", "escalation_reason": None})
-        _save_conversation_state(th, state, "resolved", escalation_id)
-    return {"escalation_id": escalation_id, "decision": body.action, "resumed": resumed,
-            "refund_updated": refund_updated}
+        refund_updated = False
+        proposed_action = esc.get("proposed_action")
+        refund_id = proposed_action.get("refund_id") if isinstance(proposed_action, dict) else None
+        if refund_id:
+            refund_action = "reject" if body.action == "reject" else "approve"
+            refund_response = crm("PATCH", f"/refunds/{refund_id}", json={"action": refund_action, "note": body.note})
+            refund_updated = refund_response.ok
+
+        if resume_scheduled and thread_id:
+            background_tasks.add_task(_complete_escalation_resume, thread_id, esc["customer_id"], escalation_id, body.action, message)
+
+        return {"escalation_id": escalation_id, "decision": body.action, "resumed": False,
+                "resume_scheduled": resume_scheduled, "refund_updated": refund_updated}
+    except Exception:
+        if resume_scheduled and thread_id:
+            RT.release(thread_id)
+        raise
 
 
 @app.get("/api/dashboard/summary")
@@ -857,9 +905,14 @@ def dashboard_summary(_: None = Depends(require_key)) -> dict:
         except (requests.RequestException, ValueError):
             return None
 
-    return {"awaiting_review": count("/escalations", {"status": "pending"}),
-            "refunds_pending_review": count("/refunds", {"status": "pending_review"}),
-            "open_incidents": count("/incidents", {"status": "open"})}
+    queries = (
+        ("/escalations", {"status": "pending"}),
+        ("/refunds", {"status": "pending_review"}),
+        ("/incidents", {"status": "open"}),
+    )
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        awaiting, refunds, incidents = pool.map(lambda query: count(*query), queries)
+    return {"awaiting_review": awaiting, "refunds_pending_review": refunds, "open_incidents": incidents}
 
 
 @app.post("/api/demo/reset")

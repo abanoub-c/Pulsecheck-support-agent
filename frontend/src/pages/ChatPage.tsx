@@ -43,6 +43,7 @@ export default function ChatPage() {
   const [threadLoading, setThreadLoading] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [checkingReply, setCheckingReply] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const retryMessageIdRef = useRef<string | null>(null);
@@ -71,6 +72,12 @@ export default function ChatPage() {
     } finally { if (!quiet) setThreadLoading(false); }
   }, []);
 
+  const checkForReply = async () => {
+    setCheckingReply(true);
+    try { await loadThread(threadId, true); }
+    finally { setCheckingReply(false); }
+  };
+
   const refreshHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
@@ -82,6 +89,15 @@ export default function ChatPage() {
   }, [selectedCustomerId]);
 
   useEffect(() => { void refreshHistory(); }, [refreshHistory]);
+
+  useEffect(() => {
+    if (threadStatus !== 'escalated' || !threadId) return;
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadThread(threadId, true);
+    }, 10_000);
+    const stopAfterGracePeriod = window.setTimeout(() => window.clearInterval(poll), 90_000);
+    return () => { window.clearInterval(poll); window.clearTimeout(stopAfterGracePeriod); };
+  }, [threadStatus, threadId, loadThread]);
 
   useEffect(() => {
     if (requestedThreadParam && !requestedThread) setSearchParams({}, { replace: true });
@@ -105,14 +121,6 @@ export default function ChatPage() {
     window.addEventListener('pulsecheck:reset', onReset);
     return () => window.removeEventListener('pulsecheck:reset', onReset);
   }, [selectedCustomerId, loadThread, refreshHistory]);
-
-  useEffect(() => {
-    if (threadStatus !== 'escalated' || !threadId) return;
-    const timer = window.setInterval(() => {
-      void loadThread(threadId, true);
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [threadStatus, threadId, loadThread]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: 'smooth' });
@@ -181,7 +189,10 @@ export default function ChatPage() {
         }
       }, controller.signal);
       setWaking(false);
-      await loadThread(threadId, true);
+      // The streamed events already contain the new reply. Refresh the durable
+      // transcript in the background so a slow database read cannot keep the
+      // composer locked after the agent has answered.
+      void loadThread(threadId, true);
       if (!agentError) retryMessageIdRef.current = null;
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -261,7 +272,7 @@ export default function ChatPage() {
         <textarea id="chat-composer" rows={2} value={input} maxLength={MAX_CHARS} onChange={(event) => setInput(event.target.value)} onKeyDown={onComposeKey} placeholder="Write a message…" disabled={streaming} />
         <div className="composer-footer"><span className={input.length >= MAX_CHARS ? 'char-count is-limit' : 'char-count'}>{input.length}/{MAX_CHARS} <span>· Enter to send, Shift+Enter for a new line</span></span><button className="send-button" type="submit" disabled={streaming || !input.trim()} aria-label="Send message">{streaming && !responseReceived ? <LoaderCircle className="spin" size={17} /> : <Send size={16} />}<span>Send</span></button></div>
       </form>}
-      {threadStatus === 'escalated' && <div className="composer-paused"><ShieldCheck size={15} /> Chat is paused until the human specialist replies.</div>}
+      {threadStatus === 'escalated' && <div className="composer-paused"><ShieldCheck size={15} /><span>Chat is paused until the human specialist replies.</span><button className="text-button" type="button" onClick={() => void checkForReply()} disabled={checkingReply}>{checkingReply ? <LoaderCircle className="spin" size={14} /> : <RotateCcw size={14} />}{checkingReply ? 'Checking…' : 'Check for reply'}</button></div>}
       <div className="chat-footer-note"><span>Responses are simulated from sample data.</span><span>Thread <code>{threadId.slice(0, 8)}</code></span></div>
     </div>
   </section>;
