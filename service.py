@@ -864,6 +864,11 @@ def dashboard_summary(_: None = Depends(require_key)) -> dict:
 
 @app.post("/api/demo/reset")
 def demo_reset(_: None = Depends(require_key)) -> dict:
+    # Keep destructive demo reset opt-in in deployed environments. Check this
+    # before deleting any LangGraph checkpoints so a disabled reset is a no-op.
+    if os.getenv("PULSECHECK_ENABLE_ADMIN", "0") != "1":
+        raise HTTPException(status_code=404, detail="Demo reset is disabled")
+
     if not RT.begin_reset():
         raise HTTPException(status_code=409, detail="Wait for active agent work to finish before resetting demo data.")
 

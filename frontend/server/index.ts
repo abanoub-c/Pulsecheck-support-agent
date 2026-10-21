@@ -2,7 +2,6 @@ import './load-env.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServer as createViteServer } from 'vite';
 import apiRouter from './routes/api.js';
 
 const app = express();
@@ -37,6 +36,7 @@ app.get('/_app/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 app.use('/api', apiRouter);
 
 if (process.env.NODE_ENV === 'development') {
+  const { createServer: createViteServer } = await import('vite');
   const vite = await createViteServer({
     root: projectRoot,
     configFile: path.join(projectRoot, 'vite.config.ts'),

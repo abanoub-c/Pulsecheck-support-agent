@@ -1,10 +1,8 @@
 # Pulsecheck Multi-Agent Support System — Project Brief
 
-You're picking up an in-progress build. This document is the ground truth for
-what's designed, what's actually applied, and what's still open. Status
-markers: ✅ confirmed applied by the developer · 🟡 designed/recommended in a
-prior session but not confirmed applied · ⚠️ a bug that was specifically
-found and fixed — do not reintroduce it.
+This document retains design notes from earlier build sessions; some status
+markers below are historical. The current Render, Neon, Vercel, Docker, and
+environment setup is documented in [`frontend/README.md`](frontend/README.md).
 
 ---
 
@@ -22,28 +20,24 @@ all data is seeded/synthetic.
 ## 2. Tech stack
 
 - **Orchestration:** LangGraph (Python), `StateGraph` with conditional edges.
-- **LLM:** `ChatGroq`, model `"openai/gpt-oss-20b"`, `temperature=0`, via
-  `GROQ_API_KEY`. Used in every node's own file (no shared LLM instance).
+- **LLM:** Shared provider/model factory in `agent/llm_config.py`, configured
+  from the repository-root `.env` for all agent nodes.
 - **Backend:** FastAPI + SQLAlchemy. SQLite locally
   (`PULSECHECK_DATABASE_URL`, default `sqlite:///./pulsecheck.db`).
 - **Local dev:** `langgraph dev` / Studio, driven by `langgraph.json` →
   `agent/graph.py:graph`. `.langgraph_api/` is the dev server's own local
   checkpoint store — don't touch it directly.
-- **Planned production (🟡 designed, not yet built):** a single merged
-  FastAPI service (`service.py` — does not exist yet, needs creating at
-  repo root) that mounts `backend/app/main.py` as a sub-app and adds an
-  agent chat endpoint on top of `builder.compile(checkpointer=...)`.
-  Deploy target: Render (free web service — sleeps after 15 min idle, full
-  cold restart ~30–60s). DB target: **Neon Postgres**, chosen specifically
-  over Render's own free Postgres (which expires and is deleted after
-  **30 days**, not 90 — this was corrected mid-project). Neon's free tier
-  has no expiry, autosuspends after 5 min idle, wakes in ms–seconds.
+- **Production:** `service.py` combines the FastAPI CRM and LangGraph agent;
+  the root `Dockerfile` packages it for Render. The Render Blueprint also
+  runs the Express BFF container, while Vercel serves the Vite UI and Neon
+  PostgreSQL stores CRM records, chat history, and graph checkpoints.
 
 ## 3. Repo structure (as of this session)
 
 ```
 pulsecheck-support-agent/
 ├── agent/
+│   ├── llm_config.py        # shared provider/model configuration
 │   ├── nodes/
 │   │   ├── router.py
 │   │   ├── dispatch.py
@@ -57,18 +51,19 @@ pulsecheck-support-agent/
 │   ├── guardrails.py      # 🟡 proposed (gated-action policy) — NOT applied
 │   └── test.py             # local CLI harness (SqliteSaver-based)
 ├── backend/app/
-│   ├── main.py              # ALL CRM endpoints live here — flat structure,
-│   │                         # no services/ or routes/ split. Don't invent one.
-│   └── models.py
+│   ├── main.py              # CRM endpoints and startup database setup
+│   ├── models.py
+│   └── routes/seed_data.py
 ├── langgraph.json
 ├── .langgraph_api/          # local dev persistence, don't edit
-└── service.py                # 🟡 planned prod entrypoint — NOT created yet
+├── Dockerfile               # FastAPI + agent container
+├── frontend/Dockerfile      # Express BFF container
+├── render.yaml              # Render Blueprint
+└── service.py               # combined FastAPI agent + CRM entrypoint
 ```
 
-**Important:** there is no `services/` folder and no per-resource route
-files (`routes/subscriptions.py` etc.) — everything backend-side is in one
-`main.py`. This was a real confusion earlier in the build; don't reintroduce
-a split structure without checking first.
+The CRM route handlers are primarily in `backend/app/main.py`; seed fixtures
+are in `backend/app/routes/seed_data.py`.
 
 ## 4. Graph architecture (current agreed design)
 
@@ -303,15 +298,15 @@ Roughly in order of how much they'd bite in a demo:
    were added; without them, an explicit "let me talk to a human" or a
    plain "thanks" both get routed through the normal confidence-tier logic
    instead of handled directly.
-6. `service.py` (production entrypoint), Render deployment, Neon migration —
-   all designed, none built yet.
+6. The combined `service.py`, Render Blueprint, Dockerfiles, and Neon
+   connection path are implemented; deployment setup is in
+   `frontend/README.md`.
 7. Ops dashboard's Approve/Edit/Reject buttons need to call
    `Command(resume={"action": ..., "customer_message": ...})` — dashboard
    file itself hasn't been reviewed in this session.
-8. Original build plan's eval harness (`agent/evals/golden_set.jsonl` +
-   accuracy scoring), Docker/docker-compose, and LangSmith tracing are all
-   still per the original plan — not touched in this session, status
-   unknown.
+8. The evaluation harness is present but should be run against the final
+   deployment configuration before relying on its results. LangSmith tracing
+   can be enabled through the root `.env` settings.
 
 ## 9. Structural bugs fixed this session (context — don't reintroduce)
 

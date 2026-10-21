@@ -74,11 +74,11 @@ Create a Blueprint from the repository root using [`render.yaml`](../render.yaml
 - `pulsecheck-agent`: the combined FastAPI agent and CRM service.
 - `pulsecheck-bff`: the Express API service that Vercel calls.
 
-Set the prompted `PULSECHECK_DATABASE_URL` and `GROQ_API_KEY` on `pulsecheck-agent`. Set `CORS_ORIGINS` on `pulsecheck-bff` to the Vercel site origin, for example `https://your-project.vercel.app`. Separate multiple allowed site origins with commas. The Blueprint generates `INTERNAL_API_KEY` for the agent and passes the same value to the BFF. Render may assign a different service hostname if a name is unavailable; use the actual `pulsecheck-bff` URL in the next step.
+Set the prompted `PULSECHECK_DATABASE_URL` to the Neon connection URL (including `sslmode=require`) and set `GROQ_API_KEY` on `pulsecheck-agent`. The Blueprint uses the root `Dockerfile` for the FastAPI + agent service and `frontend/Dockerfile` for the Express BFF. It generates `INTERNAL_API_KEY` for the agent and passes the same value to the BFF. Set `CORS_ORIGINS` on `pulsecheck-bff` to the Vercel site origin, for example `https://your-project.vercel.app`; separate multiple origins with commas. The model provider and name default to Groq and `openai/gpt-oss-20b`; change `LLM_PROVIDER` and `LLM_MODEL` in Render if you switch providers, and add that provider's API key in Render's environment settings. Use the actual BFF URL in the next step.
 
 ### 3. Vercel
 
-Create a Vercel project from this repository with the project root set to `frontend`. Use the Vite build (`pnpm build`) and output directory `dist`. Set this build environment variable to the BFF's public Render origin, with no `/api` suffix:
+Create a Vercel project from this repository with the project root set to `frontend`. `frontend/vercel.json` sets the Vite build command, frozen pnpm install, `dist` output, and SPA route fallback. Set this build environment variable to the BFF's public Render origin, with no `/api` suffix:
 
 ```text
 VITE_API_BASE_URL=https://your-pulsecheck-bff.onrender.com
@@ -93,7 +93,7 @@ Redeploy after changing this value because Vite embeds it in the browser bundle.
 - Local SQLite development keeps the transcript in SQLite but uses an in-memory graph checkpointer. Set `PULSECHECK_DATABASE_URL` to Neon/PostgreSQL on Render to enable durable graph checkpoints.
 - Mock mode remains process-local and is intended for previews, not shared production history.
 
-The app has no sign-in or staff/customer authorization yet. Treat this deployment as a synthetic-data demo; add authentication and access control before storing real customer conversations. CORS restricts browser origins but does not authenticate API callers.
+The app has no sign-in or staff/customer authorization yet. This deployment is suitable for synthetic demo data; add authentication and access control before storing real customer conversations. CORS restricts browser origins but does not authenticate API callers.
 
 ## Checks and build
 
@@ -105,10 +105,3 @@ pnpm start
 ```
 
 The production container builds the Vite output and runs the Express BFF with `PORT` (default 3000). No payment processing, direct Node-to-LLM call or raw model chain-of-thought is included.
-
-## Assumptions
-
-- CRM and agent URLs are not configured in the current workspace, so mock mode is the useful default.
-- The managed database stays disabled because the specified architecture gives persistence to the CRM.
-- Mock data is shared by one running preview process and is resettable; durable multi-instance production state belongs in the external CRM/agent services.
-- The delivered target is a working Preview/checkpoint, not an automatically published public site.
