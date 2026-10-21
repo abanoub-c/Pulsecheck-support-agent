@@ -1,7 +1,9 @@
 import type { AnalyticsData, ApiError, ConversationSummary, CustomerDetail, CustomerRow, DashboardSummary, DemoCustomer, Escalation, Incident, SseEvent, ThreadRecord } from './types';
 import { consumeEventStream } from './sse';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const defaultProductionApiBaseUrl = 'https://pulsecheck-bff.onrender.com';
+const API_BASE_URL = (configuredApiBaseUrl || (import.meta.env.PROD ? defaultProductionApiBaseUrl : '')).replace(/\/$/, '');
 const apiUrl = (path: string) => `${API_BASE_URL}${path}`;
 const RENDER_WAKE_RETRY_DELAYS_MS = [2_000, 3_000, 5_000, 8_000, 12_000, 15_000, 15_000, 15_000];
 
