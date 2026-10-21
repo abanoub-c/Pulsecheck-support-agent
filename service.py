@@ -896,11 +896,14 @@ def demo_reset(_: None = Depends(require_key)) -> dict:
             except Exception as error:  # noqa: BLE001
                 raise HTTPException(status_code=500, detail="Could not clear all saved agent checkpoints; retry the reset.") from error
 
-        r = crm("POST", "/admin/reseed")
-        if r.status_code == 404:
-            raise HTTPException(status_code=403, detail="Reset is disabled on this CRM (PULSECHECK_ENABLE_ADMIN=0)")
-        if not r.ok:
-            raise HTTPException(status_code=502, detail=f"CRM error {r.status_code}")
+        # The CRM is mounted inside this same FastAPI app. Reseed it directly
+        # instead of making an HTTP request back into this process; the
+        # loopback request can time out while Postgres drops and recreates the
+        # seed tables.
+        try:
+            seed_database(force=True)
+        except Exception as error:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail="Could not restore the CRM database from the original seed data.") from error
 
         with RT.lock:
             RT.threads.clear()

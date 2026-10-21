@@ -22,7 +22,7 @@ Open `http://localhost:3000`. The BFF listens on `0.0.0.0` and serves the Vite a
 
 ## Mock mode
 
-Set `MOCK_API=true` to run without external services; this keeps synthetic customer, ticket, subscription, incident, thread and escalation state in the running Node process. `POST /api/demo/reset` restores the initial fixture, clears generated chats and decisions, and restores the seeded $299 refund-review conversation and escalation. In live backend mode, it also clears transcript rows and LangGraph checkpoints before reseeding the CRM. The five demo paths are available through sample prompts:
+Set `MOCK_API=true` to run without external services; this keeps synthetic customer, ticket, subscription, incident, thread and escalation state in the running Node process. `POST /api/demo/reset` restores the initial fixture, clears generated chats and decisions, and restores the seeded $299 refund-review conversation and escalation. In live backend mode, it drops and recreates the CRM tables from `backend/app/routes/seed_data.py`, clears transcript rows and LangGraph checkpoints, and restores the original data. The five demo paths are available through sample prompts:
 
 1. Crestpoint Systems downgrade succeeds and shows billing tool steps.
 2. Halcyon Cloud’s $299 refund is prepared and held for manager review.

@@ -69,7 +69,7 @@ async function proxyDemoReset(res: Response) {
   const url = agentUrl('demo/reset');
   if (!url) return res.status(503).json({ error: 'AGENT_API_URL is not configured.' });
   try {
-    const response = await fetch(url, { method: 'POST', headers: { ...internalHeaders() }, signal: AbortSignal.timeout(25_000) });
+    const response = await fetch(url, { method: 'POST', headers: { ...internalHeaders() }, signal: AbortSignal.timeout(120_000) });
     const text = await response.text();
     if (response.ok) lastThreadMessage.clear();
     return res.status(response.status).type(response.headers.get('content-type') ?? 'application/json').send(text);
