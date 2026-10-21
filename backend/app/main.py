@@ -572,12 +572,21 @@ def seed_database(force: bool = False) -> None:
             Base.metadata.create_all(bind=engine)
             _upgrade_schema()
 
+        # Flush referenced rows before their dependents. Some models (notably
+        # DowntimeEvent -> KnownIncident) use scalar foreign keys without ORM
+        # relationships, so SQLAlchemy cannot infer their insert ordering.
         db.add_all(Customer(**row) for row in CUSTOMERS)
+        db.flush()
+
         db.add_all(Subscription(**row) for row in SUBSCRIPTIONS)
         db.add_all(Ticket(**row) for row in TICKETS)
         db.add_all(KnownIncident(**row) for row in KNOWN_INCIDENTS)
+        db.flush()
+
         db.add_all(Invoice(**row) for row in INVOICES)
         db.add_all(Refund(**row) for row in REFUNDS)
+        db.flush()
+
         db.add_all(DowntimeEvent(**row) for row in DOWNTIME_EVENTS)
         db.flush()
         _ensure_pending_refund_escalations(db)
