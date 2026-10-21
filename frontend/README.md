@@ -9,8 +9,12 @@ React + TypeScript + Vite, React Router, Express BFF, Tailwind CSS semantic toke
 ## Run locally
 
 ```bash
-pnpm install
+# Run from the repository root once to create the shared local settings file.
 cp .env.example .env
+
+# Then enter frontend to install and run the UI/BFF.
+cd frontend
+pnpm install
 pnpm dev
 ```
 
@@ -18,7 +22,7 @@ Open `http://localhost:3000`. The BFF listens on `0.0.0.0` and serves the Vite a
 
 ## Mock mode
 
-Preview is designed to work without external services. `MOCK_API=true` is the default and keeps synthetic customer, ticket, subscription, incident, thread and escalation state in the running Node process. `POST /api/demo/reset` restores the initial fixture, clears generated chats and decisions, and restores the seeded $299 refund-review conversation and escalation. In live backend mode, it also clears transcript rows and LangGraph checkpoints before reseeding the CRM. The five demo paths are available through sample prompts:
+Set `MOCK_API=true` to run without external services; this keeps synthetic customer, ticket, subscription, incident, thread and escalation state in the running Node process. `POST /api/demo/reset` restores the initial fixture, clears generated chats and decisions, and restores the seeded $299 refund-review conversation and escalation. In live backend mode, it also clears transcript rows and LangGraph checkpoints before reseeding the CRM. The five demo paths are available through sample prompts:
 
 1. Crestpoint Systems downgrade succeeds and shows billing tool steps.
 2. Halcyon Cloud’s $299 refund is prepared and held for manager review.
@@ -30,7 +34,9 @@ The shared fixtures contain 25 customers, 25 subscriptions, 55 tickets and 7 inc
 
 ## Environment
 
-See `.env.example` for the safe defaults. `AGENT_API_URL` and `CRM_API_URL` are server-only. `MAX_MESSAGE_CHARS` defaults to 500 and `RATE_LIMIT_MESSAGES_PER_HOUR` defaults to 30. The BFF validates inputs with Zod, allow-lists chat customer IDs, rate-limits messages/resets, sets security headers, sanitizes agent Markdown in the browser, and never sends internal service URLs or API keys to the client.
+See the repository-root `.env.example` for the complete variable list. Keep the single local `.env` in the repository root; the Python service, agent, Node BFF, and Vite all load settings from there. `AGENT_API_URL`, `CRM_API_URL`, and `INTERNAL_API_KEY` are server-only. Deployment platforms should receive their values through Render or Vercel environment settings.
+
+All agent nodes use the shared factory in [`agent/llm_config.py`](../agent/llm_config.py). Change `LLM_PROVIDER`, `LLM_MODEL`, the provider key, and optional `LLM_*` settings in the root `.env`; the router, specialists, and summarizer pick them up after the Python service restarts. Supported providers are Groq, OpenAI, Anthropic, and OpenAI-compatible endpoints. Provider packages are listed in the root `requirements.txt`.
 
 ## Python CRM and agent mode
 
@@ -47,7 +53,7 @@ cd frontend
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The Python service reads `GROQ_API_KEY` and the CRM database configuration from the repository root `.env`. `frontend/.env` contains only the Node BFF's service URLs, port, and matching internal-service key. In live mode, chat, thread replay, escalations and human decisions use LangGraph; clients, incidents, ticket analytics and customer details use the CRM database. Demo reset reseeds the CRM and clears the agent's in-process thread logs. Copy `.env.example` to `.env` to use the standalone mock instead.
+Open `http://localhost:3000`. The Python service and frontend use the same repository-root `.env`; `AGENT_PORT` and `FRONTEND_PORT` keep their local ports separate. Set `MOCK_API=true` to use the standalone mock, or set `MOCK_API=false` and provide a valid `GROQ_API_KEY` to use the real agent and CRM. In live mode, chat, thread replay, escalations and human decisions use LangGraph; clients, incidents, ticket analytics and customer details use the CRM database. Demo reset reseeds the CRM and clears the agent's in-process thread logs.
 
 The CRM's customer list and ticket analytics endpoints provide the projections the UI needs. For a deployed setup, configure the same `INTERNAL_API_KEY` in both services and use the public URL of the combined FastAPI service for the BFF's `AGENT_API_URL` and `CRM_API_URL` values.
 
@@ -68,11 +74,11 @@ Create a Blueprint from the repository root using [`render.yaml`](../render.yaml
 - `pulsecheck-agent`: the combined FastAPI agent and CRM service.
 - `pulsecheck-bff`: the Express API service that Vercel calls.
 
-Set the prompted `PULSECHECK_DATABASE_URL` and `GROQ_API_KEY` on `pulsecheck-agent`. Set `CORS_ORIGINS` on `pulsecheck-bff` to the Vercel site origin, for example `https://your-project.vercel.app`. Separate multiple allowed site origins with commas. The Blueprint generates `INTERNAL_API_KEY` for the agent and passes the same value to the BFF. Render may assign a different service hostname if a name is unavailable; use the actual `pulsecheck-bff` URL in the next step.
+Set the prompted `PULSECHECK_DATABASE_URL` to the Neon connection URL (including `sslmode=require`) and set `GROQ_API_KEY` on `pulsecheck-agent`. The Blueprint uses the root `Dockerfile` for the FastAPI + agent service and `frontend/Dockerfile` for the Express BFF. It generates `INTERNAL_API_KEY` for the agent and passes the same value to the BFF. Set `CORS_ORIGINS` on `pulsecheck-bff` to the Vercel site origin, for example `https://your-project.vercel.app`; separate multiple origins with commas. The model provider and name default to Groq and `openai/gpt-oss-20b`; change `LLM_PROVIDER` and `LLM_MODEL` in Render if you switch providers, and add that provider's API key in Render's environment settings. Use the actual BFF URL in the next step.
 
 ### 3. Vercel
 
-Create a Vercel project from this repository with the project root set to `frontend`. Use the Vite build (`pnpm build`) and output directory `dist`. Set this build environment variable to the BFF's public Render origin, with no `/api` suffix:
+Create a Vercel project from this repository with the project root set to `frontend`. `frontend/vercel.json` sets the Vite build command, frozen pnpm install, `dist` output, and SPA route fallback. Set this build environment variable to the BFF's public Render origin, with no `/api` suffix:
 
 ```text
 VITE_API_BASE_URL=https://your-pulsecheck-bff.onrender.com
@@ -87,7 +93,7 @@ Redeploy after changing this value because Vite embeds it in the browser bundle.
 - Local SQLite development keeps the transcript in SQLite but uses an in-memory graph checkpointer. Set `PULSECHECK_DATABASE_URL` to Neon/PostgreSQL on Render to enable durable graph checkpoints.
 - Mock mode remains process-local and is intended for previews, not shared production history.
 
-The app has no sign-in or staff/customer authorization yet. Treat this deployment as a synthetic-data demo; add authentication and access control before storing real customer conversations. CORS restricts browser origins but does not authenticate API callers.
+The app has no sign-in or staff/customer authorization yet. This deployment is suitable for synthetic demo data; add authentication and access control before storing real customer conversations. CORS restricts browser origins but does not authenticate API callers.
 
 ## Checks and build
 
@@ -99,10 +105,3 @@ pnpm start
 ```
 
 The production container builds the Vite output and runs the Express BFF with `PORT` (default 3000). No payment processing, direct Node-to-LLM call or raw model chain-of-thought is included.
-
-## Assumptions
-
-- CRM and agent URLs are not configured in the current workspace, so mock mode is the useful default.
-- The managed database stays disabled because the specified architecture gives persistence to the CRM.
-- Mock data is shared by one running preview process and is resettable; durable multi-instance production state belongs in the external CRM/agent services.
-- The delivered target is a working Preview/checkpoint, not an automatically published public site.

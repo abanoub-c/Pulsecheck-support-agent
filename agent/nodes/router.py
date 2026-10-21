@@ -14,11 +14,8 @@ import datetime
 from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_openai import ChatOpenAI  # Or your preferred chat model integration
-import os
-from langchain_groq import ChatGroq
-
 from agent.state import SupportState, TicketCategory
+from agent.llm_config import create_structured_model
 
 # ---------------------------------------------------------------------------
 # Structured Output Schema for the Classifier
@@ -119,14 +116,8 @@ def router_node(state: SupportState) -> dict:
 
     user_text = _text(messages[latest_idx].content)
 
-    # 2. Initialize the Chat Model and enforce structured output
-    # (Ensure your OPENAI_API_KEY environment variable is set)
-    llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
-    )
-    structured_llm = llm.with_structured_output(ClassificationResult, method="json_schema")
+    # 2. Initialize the shared configured model and enforce structured output.
+    structured_llm = create_structured_model(ClassificationResult, purpose="router")
 
     system_prompt = (
         "You are the front-line triage router for Pulsecheck, a SaaS monitoring platform. "

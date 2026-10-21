@@ -21,8 +21,8 @@ Differences from your previous service.py (all deliberate):
 Environment:
     GROQ_API_KEY            used by the agent nodes
     PULSECHECK_DATABASE_URL Neon/Postgres URL (CRM tables AND graph checkpoints); unset = SQLite + memory
-    CRM_API_URL             how the agent reaches the CRM. Default http://127.0.0.1:$PORT/crm (right on Render;
-                            locally set it to your uvicorn port, e.g. http://127.0.0.1:8001/crm)
+    AGENT_PORT              local Python service port (default 8000; Render injects PORT)
+    CRM_API_URL             how the agent reaches the CRM. Defaults to http://127.0.0.1:$AGENT_PORT/crm
     INTERNAL_API_KEY        shared secret; the Node server sends it as X-Internal-Key. REQUIRED when deployed.
     ALLOWED_ORIGINS         CORS origins (default http://localhost:3000)
     DEMO_CUSTOMER_IDS       optional comma-separated restriction; when unset, CRM customers can chat
@@ -44,18 +44,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Iterator, Literal, Optional
 
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:  # python-dotenv is optional
-    pass
-
 ROOT = os.path.dirname(os.path.abspath(__file__))
+from project_env import load_project_env
+
+load_project_env()
+
 # main.py imports `routes.seed_data` / `models` relative to backend/app, so make that folder importable.
 sys.path.insert(0, os.path.join(ROOT, "backend", "app"))
 
-PORT = os.getenv("PORT", "8000")
+PORT = os.getenv("PORT", os.getenv("AGENT_PORT", "8000"))
 CRM_API_URL = os.getenv("CRM_API_URL", f"http://127.0.0.1:{PORT}/crm").rstrip("/")
 os.environ["API_BASE"] = CRM_API_URL  # the combined service always routes agent tools through its mounted CRM
 
@@ -867,6 +864,11 @@ def dashboard_summary(_: None = Depends(require_key)) -> dict:
 
 @app.post("/api/demo/reset")
 def demo_reset(_: None = Depends(require_key)) -> dict:
+    # Keep destructive demo reset opt-in in deployed environments. Check this
+    # before deleting any LangGraph checkpoints so a disabled reset is a no-op.
+    if os.getenv("PULSECHECK_ENABLE_ADMIN", "0") != "1":
+        raise HTTPException(status_code=404, detail="Demo reset is disabled")
+
     if not RT.begin_reset():
         raise HTTPException(status_code=409, detail="Wait for active agent work to finish before resetting demo data.")
 

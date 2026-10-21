@@ -17,8 +17,10 @@ data (disable it with PULSECHECK_ENABLE_ADMIN=0).
 from __future__ import annotations
 
 import os
+import sys
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
@@ -27,6 +29,13 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.orm import Session, sessionmaker
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+from project_env import load_project_env  # noqa: E402
+
+load_project_env()
 
 try:  # Supports both `uvicorn app.main:app` and `uvicorn main:app`.
     from .models import (

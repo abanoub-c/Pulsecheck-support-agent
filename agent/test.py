@@ -9,8 +9,8 @@ import sys
 import os
 # THIS MUST COME FIRST! It tells Python where to look for the 'agent' folder.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from dotenv import load_dotenv
-load_dotenv()
+from project_env import load_project_env
+load_project_env()
 
 from langchain_core.messages import HumanMessage
 from agent.graph import graph

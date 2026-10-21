@@ -10,10 +10,8 @@ system incidents before creating new engineering tickets.
 from langchain_core.messages import ToolMessage
 
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
-import os
-from langchain_groq import ChatGroq
 from agent.state import SupportState
+from agent.llm_config import create_chat_model
 from agent.tools import (
     check_known_incidents,
     create_bug_ticket,
@@ -44,11 +42,7 @@ def sanitize_messages(messages):
 
 
 # 2. Initialize the LLM and bind the tools
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
-).bind_tools(TECHNICAL_TOOLS)
+llm = create_chat_model("specialist").bind_tools(TECHNICAL_TOOLS)
 
 TECHNICAL_SYSTEM_PROMPT = """You are the Technical Support Engineer for Pulsecheck.
 Your job is to diagnose API latency, monitor downtime, webhook delivery failures, and platform bugs.

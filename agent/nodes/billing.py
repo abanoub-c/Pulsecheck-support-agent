@@ -8,13 +8,10 @@ proration, and payment methods. It has exclusive access to the billing tools.
 """
 
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
-import os
-from langchain_groq import ChatGroq
 from langchain_core.messages import ToolMessage
 
-
 from agent.state import SupportState
+from agent.llm_config import create_chat_model
 from agent.tools import (
     apply_credit,
     get_invoices,
@@ -40,11 +37,7 @@ def sanitize_messages(messages):
     return fixed
 # 2. Initialize the LLM and bind the tools
 # (Using a low temperature ensures factual, deterministic tool usage)
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
-).bind_tools(BILLING_TOOLS)
+llm = create_chat_model("specialist").bind_tools(BILLING_TOOLS)
 
 BILLING_SYSTEM_PROMPT = """You are the Billing Support Specialist for Pulsecheck.
 Your job is to resolve customer questions about subscriptions, invoices, limits, and payments.

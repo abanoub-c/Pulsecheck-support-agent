@@ -7,13 +7,10 @@ This node handles money-back requests, trial cancellations, and subscription ter
 It strictly enforces financial guardrails, including the $100 human-approval threshold.
 """
 
-from langchain_core.messages import SystemMessage
-# from langchain_openai import ChatOpenAI
-import os
-from langchain_groq import ChatGroq
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 
 from agent.state import SupportState
+from agent.llm_config import create_chat_model
 from agent.tools import (
     cancel_subscription,
     get_subscription,
@@ -36,11 +33,7 @@ REFUND_TOOLS = [
 ]
 
 # 2. Initialize the LLM and bind the tools
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
-).bind_tools(REFUND_TOOLS)
+llm = create_chat_model("specialist").bind_tools(REFUND_TOOLS)
 
 REFUND_SYSTEM_PROMPT = """You are the Refund and Retention Specialist for Pulsecheck.
 You handle cash refunds, cancellations (including trials) and retention discounts.
