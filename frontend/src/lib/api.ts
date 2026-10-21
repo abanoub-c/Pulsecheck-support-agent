@@ -12,7 +12,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-function waitForRetry(delayMs: number, signal?: AbortSignal) {
+function waitForRetry(delayMs: number, signal?: AbortSignal | null) {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
       reject(signal.reason ?? new DOMException('The request was aborted.', 'AbortError'));
