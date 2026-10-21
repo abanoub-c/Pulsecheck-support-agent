@@ -61,7 +61,13 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
       setThreadStatus(waiting ? 'Waiting for a human' : 'Open');
     }).catch(() => undefined);
     void refreshPending();
-    const onEscalationsUpdated = () => { void refreshPending(); };
+    const onEscalationsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ pendingDelta?: number; refresh?: boolean }>).detail;
+      if (typeof detail?.pendingDelta === 'number') {
+        setPendingCount((current) => Math.max(0, current + detail.pendingDelta!));
+      }
+      if (detail?.refresh) void refreshPending();
+    };
     window.addEventListener('pulsecheck:escalations-updated', onEscalationsUpdated);
     return () => { active = false; window.removeEventListener('pulsecheck:escalations-updated', onEscalationsUpdated); };
   }, [selectedCustomerId]);

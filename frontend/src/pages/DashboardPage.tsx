@@ -122,18 +122,20 @@ export default function DashboardPage() {
       awaiting_review: current.awaiting_review === null ? null : Math.max(0, current.awaiting_review - 1),
       refunds_pending_review: selected.category === 'refund' && current.refunds_pending_review !== null ? Math.max(0, current.refunds_pending_review - 1) : current.refunds_pending_review,
     } : current);
+    window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { pendingDelta: -1 } }));
     try {
       await decideEscalation(selected.escalation_id, {
         action,
         customer_message: customerMessage,
         note: action === 'reject' ? rejectNote.trim() : undefined,
       });
-      window.dispatchEvent(new Event('pulsecheck:escalations-updated'));
+      window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { refresh: true } }));
       notify('Decision saved. The customer conversation is updating in the background.');
       setEditing(false); setRejecting(false); setRejectNote('');
     } catch (exception) {
       setItems((current) => current.map((item) => item.escalation_id === previous.escalation_id ? previous : item));
       setSummary(previousSummary);
+      window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { pendingDelta: 1, refresh: true } }));
       notify(exception instanceof Error ? exception.message : 'Could not save the decision.', 'error');
     } finally { setActing(false); }
   };
