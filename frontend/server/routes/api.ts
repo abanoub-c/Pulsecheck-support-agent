@@ -43,7 +43,7 @@ function crmUrl(pathAndQuery: string) {
   return `${root}/crm/${pathAndQuery.replace(/^\/+/, '')}`;
 }
 
-function internalHeaders() {
+function internalHeaders(): Record<string, string> {
   const key = process.env.INTERNAL_API_KEY;
   return key ? { 'x-internal-key': key } : {};
 }
@@ -299,7 +299,8 @@ router.get('/customers', (req, res) => {
         if (query.status !== 'All') rows = rows.filter((row) => row.status === query.status);
         if (query.category !== 'All') rows = rows.filter((row) => row.assigned_category === query.category);
         const dir = query.dir === 'desc' ? -1 : 1;
-        if (query.sort !== 'none') rows.sort((a, b) => String(a[query.sort] ?? '').localeCompare(String(b[query.sort] ?? ''), undefined, { numeric: true }) * dir);
+        const sortKey = query.sort === 'none' ? null : query.sort;
+        if (sortKey) rows.sort((a, b) => String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), undefined, { numeric: true }) * dir);
         const total = rows.length;
         const start = (query.page - 1) * query.page_size;
         return res.json({ items: rows.slice(start, start + query.page_size), total, page: query.page, page_size: query.page_size });
