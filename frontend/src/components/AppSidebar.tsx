@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Activity, BarChart3, ChevronDown, ChevronLeft, ChevronRight, Clock3, LayoutDashboard, MessageCircle, Monitor, Moon, RotateCcw, Settings2, Sun, Users, X } from 'lucide-react';
+import { Activity, BarChart3, ChevronDown, ChevronLeft, ChevronRight, Clock3, LayoutDashboard, LoaderCircle, MessageCircle, Monitor, Moon, RotateCcw, Settings2, Sun, Users, X } from 'lucide-react';
 import { getCustomerDetail, getEscalations, resetDemo, clearThreadIds, formatDate, daysUntil } from '../lib/api';
 import { useApp } from '../lib/AppContext';
 import type { CustomerDetail, DemoCustomer } from '../lib/types';
@@ -46,6 +46,7 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
   const [threadStatus, setThreadStatus] = useState('Open');
   const [theme, setTheme] = useState(readTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const location = useLocation();
   const selected = demoCustomers.find((row) => row.customer_id === selectedCustomerId);
   const railCollapsed = collapsed && !mobileOpen;
@@ -65,7 +66,9 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
   useEffect(() => { setSettingsOpen(false); }, [location.pathname]);
 
   const reset = async () => {
+    if (resetting) return;
     if (!window.confirm('Restore the original demo data? This clears every saved chat and human-review decision, then restores the original sample escalation.')) return;
+    setResetting(true);
     try {
       await resetDemo();
       clearThreadIds();
@@ -75,6 +78,8 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
       window.setTimeout(() => window.location.assign(window.location.pathname), 350);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not reset demo data.', 'error');
+    } finally {
+      setResetting(false);
     }
   };
   const customerSummary = detail?.subscription;
@@ -116,7 +121,11 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
               {settingsOpen && <div className="settings-popover" role="dialog" aria-label="Demo settings">
                 <CustomerPicker id="customer-collapsed" label="Chatting as" customers={demoCustomers} selectedId={selectedCustomerId} onSelect={setSelectedCustomerId} />
                 <ThemeSelector theme={theme} onChange={(value) => { setTheme(value); applyTheme(value); }} />
-                <button className="button button-secondary button-full" onClick={reset}><RotateCcw size={15} /> Reset demo data</button>
+                {resetting && <div className="reset-progress" role="status" aria-live="polite"><LoaderCircle className="spin" size={15} /> Restoring original demo data…</div>}
+                <button className="button button-secondary button-full" onClick={reset} disabled={resetting} aria-busy={resetting}>
+                  {resetting ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}
+                  {resetting ? 'Resetting…' : 'Reset demo data'}
+                </button>
               </div>}
             </div>
           ) : (
@@ -129,7 +138,11 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
                 <span className={statusClass}><span className="status-dot" />{threadStatus}</span>
               </div>
               <ThemeSelector theme={theme} onChange={(value) => { setTheme(value); applyTheme(value); }} />
-              <button className="reset-button" onClick={reset}><RotateCcw size={14} /> Reset demo data</button>
+              {resetting && <div className="reset-progress" role="status" aria-live="polite"><LoaderCircle className="spin" size={15} /> Restoring original demo data…</div>}
+              <button className="reset-button" onClick={reset} disabled={resetting} aria-busy={resetting}>
+                {resetting ? <LoaderCircle className="spin" size={14} /> : <RotateCcw size={14} />}
+                {resetting ? 'Resetting demo data…' : 'Reset demo data'}
+              </button>
             </div>
           )}
         </div>
