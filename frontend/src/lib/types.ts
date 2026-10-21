@@ -16,5 +16,5 @@ export type Escalation = { escalation_id: string; customer_id: string; ticket_id
 export type DashboardSummary = { awaiting_review: number | null; refunds_pending_review: number | null; open_incidents: number | null };
 export type CategoryAggregate = { category: Category; total: number; solved: number; unsolved: number };
 export type AnalyticsData = { range_days: number; total: number; by_category: CategoryAggregate[] };
-export type ApiError = { error: string; retryable?: boolean; details?: Array<{ path: string; message: string }> };
+export type ApiError = { error?: string; detail?: string; retryable?: boolean; details?: Array<{ path: string; message: string }> };
 export type SseEvent = { event: 'step' | 'message' | 'state' | 'escalated' | 'error' | 'done' | string; data: Record<string, unknown> };

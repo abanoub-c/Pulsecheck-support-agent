@@ -76,6 +76,8 @@ Create a Blueprint from the repository root using [`render.yaml`](../render.yaml
 
 Set the prompted `PULSECHECK_DATABASE_URL` to the Neon connection URL (including `sslmode=require`) and set `GROQ_API_KEY` on `pulsecheck-agent`. The Blueprint uses the root `Dockerfile` for the FastAPI + agent service and `frontend/Dockerfile` for the Express BFF. It generates `INTERNAL_API_KEY` for the agent and passes the same value to the BFF. Set `CORS_ORIGINS` on `pulsecheck-bff` to the Vercel site origin, for example `https://your-project.vercel.app`; separate multiple origins with commas. The model provider and name default to Groq and `openai/gpt-oss-20b`; change `LLM_PROVIDER` and `LLM_MODEL` in Render if you switch providers, and add that provider's API key in Render's environment settings. Use the actual BFF URL in the next step.
 
+The Blueprint enables `PULSECHECK_ENABLE_ADMIN=1` so the Reset Demo Data control can reseed the CRM and delete saved chat checkpoints. Keep this deployment on synthetic demo data: the app does not yet authenticate staff, so anyone who can reach the reset endpoint can restore the demo state.
+
 ### 3. Vercel
 
 Create a Vercel project from this repository with the project root set to `frontend`. `frontend/vercel.json` sets the Vite build command, frozen pnpm install, `dist` output, and SPA route fallback. Set this build environment variable to the BFF's public Render origin, with no `/api` suffix:

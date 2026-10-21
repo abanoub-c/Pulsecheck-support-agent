@@ -35,6 +35,7 @@ export default function ChatPage() {
   const [steps, setSteps] = useState<TraceStep[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [responseReceived, setResponseReceived] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [retryMessage, setRetryMessage] = useState('');
   const [waking, setWaking] = useState(false);
@@ -89,14 +90,14 @@ export default function ChatPage() {
       id = requestedThread;
       sessionStorage.setItem(`pulsecheck-thread:${selectedCustomerId}`, requestedThread);
     }
-    setThreadId(id); setMessages([]); setThreadState(blankState); setThreadStatus('open'); setSteps([]); setErrorMessage('');
+    setThreadId(id); setMessages([]); setThreadState(blankState); setThreadStatus('open'); setSteps([]); setErrorMessage(''); setResponseReceived(false);
     void loadThread(id);
   }, [selectedCustomerId, requestedThread, requestedThreadParam, location.pathname, loadThread, setSearchParams]);
 
   useEffect(() => {
     const onReset = () => {
       const id = getThreadId(selectedCustomerId);
-      setThreadId(id); setMessages([]); setThreadState(blankState); setThreadStatus('open'); setSteps([]); setErrorMessage(''); setRetryMessage('');
+      setThreadId(id); setMessages([]); setThreadState(blankState); setThreadStatus('open'); setSteps([]); setErrorMessage(''); setRetryMessage(''); setResponseReceived(false);
       retryMessageIdRef.current = null;
       void refreshHistory();
       void loadThread(id);
@@ -123,13 +124,13 @@ export default function ChatPage() {
     const id = crypto.randomUUID();
     sessionStorage.setItem(`pulsecheck-thread:${selectedCustomerId}`, id);
     setSearchParams({}, { replace: true });
-    setThreadId(id); setMessages([]); setThreadState(blankState); setThreadStatus('open'); setSteps([]); setErrorMessage(''); setRetryMessage('');
+    setThreadId(id); setMessages([]); setThreadState(blankState); setThreadStatus('open'); setSteps([]); setErrorMessage(''); setRetryMessage(''); setResponseReceived(false);
   };
 
   const sendMessage = async (raw: string, retry = false) => {
     const text = raw.trim();
     if (!text || text.length > MAX_CHARS || streaming || threadStatus === 'escalated') return;
-    setErrorMessage(''); setRetryMessage(''); setWaking(false); setElapsed(0); setStreaming(true); setSteps([]);
+    setErrorMessage(''); setRetryMessage(''); setWaking(false); setElapsed(0); setStreaming(true); setResponseReceived(false); setSteps([]);
     const started = new Date().toISOString();
     const messageId = retry ? retryMessageIdRef.current ?? crypto.randomUUID() : crypto.randomUUID();
     if (!retry) {
@@ -156,6 +157,7 @@ export default function ChatPage() {
           const step = readTraceStep(event.data);
           setSteps((current) => [...current, step]);
         } else if (event.event === 'message') {
+          setResponseReceived(true);
           const content = String(event.data.content ?? '');
           const role = event.data.role === 'human' ? 'human' : 'assistant';
           const traceSteps = [...steps];
@@ -165,13 +167,16 @@ export default function ChatPage() {
         } else if (event.event === 'state') {
           setThreadState(event.data as unknown as ThreadState);
         } else if (event.event === 'escalated') {
+          setResponseReceived(true);
           setThreadStatus('escalated');
           setThreadState((state) => ({ ...state, resolution_status: 'escalated', escalation_reason: String(event.data.reason ?? '') }));
         } else if (event.event === 'error') {
+          setResponseReceived(true);
           agentError = true;
           setErrorMessage(String(event.data.message ?? 'The agent could not complete the request.'));
           if (event.data.retryable) setRetryMessage(text);
         } else if (event.event === 'done') {
+          setResponseReceived(true);
           finished = true;
         }
       }, controller.signal);
@@ -247,14 +252,14 @@ export default function ChatPage() {
             </div>
           </div>
         </article>)}
-        {streaming && <div className="message-row message-assistant live-assistant"><span className="message-avatar"><ActivityMark /></span><div className="message-body"><ThinkingTrace id="live-trace" steps={steps} state={threadState} streaming /><div className="typing-indicator"><span /><span /><span />{waking ? <span className="wake-label">Waking up the agent · {elapsed}s</span> : <span className="wake-label">Working · {elapsed}s</span>}</div></div></div>}
+        {streaming && !responseReceived && <div className="message-row message-assistant live-assistant"><span className="message-avatar"><ActivityMark /></span><div className="message-body"><ThinkingTrace id="live-trace" steps={steps} state={threadState} streaming /><div className="typing-indicator"><span /><span /><span />{waking ? <span className="wake-label">Waking up the agent · {elapsed}s</span> : <span className="wake-label">Working · {elapsed}s</span>}</div></div></div>}
         {threadStatus === 'escalated' && <div className="escalation-banner"><span className="escalation-icon"><Headphones size={17} /></span><div><strong>Passed to a human specialist</strong><p>{threadState.escalation_reason?.replaceAll('_', ' ') || 'A human specialist is reviewing this conversation.'} Your conversation will resume here.</p></div></div>}
         {errorMessage && <div className="chat-error" role="alert"><CircleAlert size={16} /><span>{errorMessage}</span>{retryMessage && <button className="text-button" onClick={() => void sendMessage(retryMessage, true)}><RotateCcw size={14} /> Retry</button>}</div>}
       </div>
       {threadStatus !== 'escalated' && <form className="composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
         <label className="visually-hidden" htmlFor="chat-composer">Write a message</label>
         <textarea id="chat-composer" rows={2} value={input} maxLength={MAX_CHARS} onChange={(event) => setInput(event.target.value)} onKeyDown={onComposeKey} placeholder="Write a message…" disabled={streaming} />
-        <div className="composer-footer"><span className={input.length >= MAX_CHARS ? 'char-count is-limit' : 'char-count'}>{input.length}/{MAX_CHARS} <span>· Enter to send, Shift+Enter for a new line</span></span><button className="send-button" type="submit" disabled={streaming || !input.trim()} aria-label="Send message">{streaming ? <LoaderCircle className="spin" size={17} /> : <Send size={16} />}<span>Send</span></button></div>
+        <div className="composer-footer"><span className={input.length >= MAX_CHARS ? 'char-count is-limit' : 'char-count'}>{input.length}/{MAX_CHARS} <span>· Enter to send, Shift+Enter for a new line</span></span><button className="send-button" type="submit" disabled={streaming || !input.trim()} aria-label="Send message">{streaming && !responseReceived ? <LoaderCircle className="spin" size={17} /> : <Send size={16} />}<span>Send</span></button></div>
       </form>}
       {threadStatus === 'escalated' && <div className="composer-paused"><ShieldCheck size={15} /> Chat is paused until the human specialist replies.</div>}
       <div className="chat-footer-note"><span>Responses are simulated from sample data.</span><span>Thread <code>{threadId.slice(0, 8)}</code></span></div>

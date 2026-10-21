@@ -16,7 +16,7 @@ services:
       - key: LLM_MODEL
         value: openai/gpt-oss-20b
       - key: PULSECHECK_ENABLE_ADMIN
-        value: "0"
+        value: "1"
       - key: INTERNAL_API_KEY
         generateValue: true
 

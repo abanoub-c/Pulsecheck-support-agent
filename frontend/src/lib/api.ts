@@ -63,7 +63,7 @@ async function request<T>(path: string, init?: RequestInit, options: { retryForW
     }
 
     const body = await response.json().catch(() => ({ error: 'Request failed.' })) as ApiError;
-    throw new ApiRequestError(body.error || `Request failed (${response.status}).`, response.status);
+    throw new ApiRequestError(body.error || body.detail || `Request failed (${response.status}).`, response.status);
   }
 }
 
