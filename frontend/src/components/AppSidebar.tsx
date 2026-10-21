@@ -40,9 +40,8 @@ function applyTheme(theme: string) {
 }
 
 export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: Props) {
-  const { demoCustomers, selectedCustomerId, setSelectedCustomerId, notify } = useApp();
+  const { demoCustomers, selectedCustomerId, setSelectedCustomerId, notify, pendingEscalationCount, pendingEscalationRevision, setPendingEscalationCount, adjustPendingEscalationCount } = useApp();
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
   const [threadStatus, setThreadStatus] = useState('Open');
   const [theme, setTheme] = useState(readTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -50,27 +49,32 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
   const location = useLocation();
   const selected = demoCustomers.find((row) => row.customer_id === selectedCustomerId);
   const railCollapsed = collapsed && !mobileOpen;
+  const pendingRevisionRef = useRef(pendingEscalationRevision);
+  pendingRevisionRef.current = pendingEscalationRevision;
 
   useEffect(() => {
     let active = true;
     getCustomerDetail(selectedCustomerId).then((data) => { if (active) setDetail(data); }).catch(() => { if (active) setDetail(null); });
-    const refreshPending = () => getEscalations('pending').then(({ items }) => {
+    const refreshPending = () => {
+      const revisionAtRequest = pendingRevisionRef.current;
+      return getEscalations('pending').then(({ items }) => {
       if (!active) return;
-      setPendingCount(items.length);
+      // Don't let an older request overwrite a count changed by a local action
+      // while that request was still in flight.
+      if (revisionAtRequest === pendingRevisionRef.current) setPendingEscalationCount(items.length);
       const waiting = items.some((item) => item.customer_id === selectedCustomerId);
       setThreadStatus(waiting ? 'Waiting for a human' : 'Open');
-    }).catch(() => undefined);
+      }).catch(() => undefined);
+    };
     void refreshPending();
     const onEscalationsUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ pendingDelta?: number; refresh?: boolean }>).detail;
-      if (typeof detail?.pendingDelta === 'number') {
-        setPendingCount((current) => Math.max(0, current + detail.pendingDelta!));
-      }
+      if (typeof detail?.pendingDelta === 'number') adjustPendingEscalationCount(detail.pendingDelta);
       if (detail?.refresh) void refreshPending();
     };
     window.addEventListener('pulsecheck:escalations-updated', onEscalationsUpdated);
     return () => { active = false; window.removeEventListener('pulsecheck:escalations-updated', onEscalationsUpdated); };
-  }, [selectedCustomerId]);
+  }, [selectedCustomerId, setPendingEscalationCount, adjustPendingEscalationCount]);
 
   useEffect(() => { setSettingsOpen(false); }, [location.pathname]);
 
@@ -117,7 +121,7 @@ export function AppSidebar({ collapsed, mobileOpen, onToggle, onCloseMobile }: P
             <NavLink key={to} to={to} onClick={onCloseMobile} className={({ isActive }) => `nav-item ${isActive ? 'is-active' : ''}`} title={railCollapsed ? label : undefined}>
               <span className="nav-icon"><Icon size={18} strokeWidth={1.8} /></span>
               {!railCollapsed && <span className="nav-label">{label}</span>}
-              {label === 'Dashboard' && pendingCount > 0 && <span className="nav-count" aria-label={`${pendingCount} pending escalations`}>{pendingCount}</span>}
+              {label === 'Dashboard' && pendingEscalationCount > 0 && <span className="nav-count" aria-label={`${pendingEscalationCount} pending escalations`}>{pendingEscalationCount}</span>}
             </NavLink>
           ))}
         </nav>

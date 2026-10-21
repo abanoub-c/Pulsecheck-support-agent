@@ -62,7 +62,7 @@ export default function DashboardPage() {
   const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
   const [customerDetailError, setCustomerDetailError] = useState('');
   const messageRef = useRef<HTMLTextAreaElement>(null);
-  const { notify, setSelectedCustomerId } = useApp();
+  const { notify, setSelectedCustomerId, adjustPendingEscalationCount } = useApp();
   const navigate = useNavigate();
 
   const load = useCallback(async (initial = false) => {
@@ -122,7 +122,7 @@ export default function DashboardPage() {
       awaiting_review: current.awaiting_review === null ? null : Math.max(0, current.awaiting_review - 1),
       refunds_pending_review: selected.category === 'refund' && current.refunds_pending_review !== null ? Math.max(0, current.refunds_pending_review - 1) : current.refunds_pending_review,
     } : current);
-    window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { pendingDelta: -1 } }));
+    adjustPendingEscalationCount(-1);
     try {
       await decideEscalation(selected.escalation_id, {
         action,
@@ -135,7 +135,8 @@ export default function DashboardPage() {
     } catch (exception) {
       setItems((current) => current.map((item) => item.escalation_id === previous.escalation_id ? previous : item));
       setSummary(previousSummary);
-      window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { pendingDelta: 1, refresh: true } }));
+      adjustPendingEscalationCount(1);
+      window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { refresh: true } }));
       notify(exception instanceof Error ? exception.message : 'Could not save the decision.', 'error');
     } finally { setActing(false); }
   };

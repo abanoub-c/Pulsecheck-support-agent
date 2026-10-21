@@ -20,7 +20,7 @@ function roleName(role: ChatMessage['role']) { return role === 'human' ? 'Human 
 function timeLabel(value: string) { return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 
 export default function ChatPage() {
-  const { demoCustomers, selectedCustomerId, notify } = useApp();
+  const { demoCustomers, selectedCustomerId, notify, adjustPendingEscalationCount } = useApp();
   const customer = demoCustomers.find((item) => item.customer_id === selectedCustomerId);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -150,6 +150,7 @@ export default function ChatPage() {
     const controller = new AbortController(); abortRef.current = controller;
     let finished = false;
     let agentError = false;
+    let escalationCounted = false;
     const elapsedTimer = window.setInterval(() => setElapsed((value) => value + 1), 1000);
     const wakeTimer = window.setTimeout(() => setWaking(true), 3000);
     const hardTimeout = window.setTimeout(() => {
@@ -178,6 +179,10 @@ export default function ChatPage() {
           setResponseReceived(true);
           setThreadStatus('escalated');
           setThreadState((state) => ({ ...state, resolution_status: 'escalated', escalation_reason: String(event.data.reason ?? '') }));
+          if (!escalationCounted) {
+            escalationCounted = true;
+            adjustPendingEscalationCount(1);
+          }
         } else if (event.event === 'error') {
           setResponseReceived(true);
           agentError = true;
@@ -186,6 +191,7 @@ export default function ChatPage() {
         } else if (event.event === 'done') {
           setResponseReceived(true);
           finished = true;
+          if (escalationCounted) window.dispatchEvent(new CustomEvent('pulsecheck:escalations-updated', { detail: { refresh: true } }));
         }
       }, controller.signal);
       setWaking(false);
