@@ -112,20 +112,47 @@ def _checkpointer_url(url: str) -> str:
 
 
 def _connect_checkpointer():
-    """Use durable Neon/Postgres checkpoints in production, memory for local SQLite runs."""
+    """Use a checked, replaceable Postgres pool in production and memory locally."""
     url = os.getenv("PULSECHECK_DATABASE_URL", "")
     if not url.startswith(("postgresql", "postgres")):
         return None, MemorySaver()
 
     from langgraph.checkpoint.postgres import PostgresSaver
+    from psycopg.rows import dict_row
+    from psycopg_pool import ConnectionPool
     from tenacity import retry, stop_after_attempt, wait_exponential
 
     @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=15))
     def connect():
-        ctx = PostgresSaver.from_conn_string(_checkpointer_url(url))
-        saver = ctx.__enter__()
-        saver.setup()  # idempotent: creates the checkpoint tables on first run only
-        return ctx, saver
+        pool = ConnectionPool(
+            conninfo=_checkpointer_url(url),
+            min_size=1,
+            max_size=5,
+            max_idle=120,
+            max_lifetime=1800,
+            reconnect_timeout=300,
+            check=ConnectionPool.check_connection,
+            kwargs={
+                "autocommit": True,
+                "prepare_threshold": 0,
+                "row_factory": dict_row,
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 3,
+            },
+            open=False,
+        )
+        try:
+            # Wait for a usable connection before serving requests. The pool
+            # will validate borrowed connections and replace dead ones later.
+            pool.open(wait=True)
+            saver = PostgresSaver(pool)
+            saver.setup()  # idempotent: creates/migrates checkpoint tables
+            return pool, saver
+        except Exception:
+            pool.close()
+            raise
 
     return connect()
 
@@ -140,7 +167,7 @@ async def lifespan(app: FastAPI):
     app.state.graph = builder.compile(checkpointer=saver)
     yield
     if ctx is not None:
-        ctx.__exit__(None, None, None)
+        ctx.close()
 
 
 app = FastAPI(title="Pulsecheck", lifespan=lifespan)
